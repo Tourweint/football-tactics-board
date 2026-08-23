@@ -2,7 +2,7 @@
 
 把"画在黑板上的战术"数字化：拖拽排兵布阵、保存多套方案、一键导出分享给队员的赛前战术准备工具。浏览器直接打开即用，无需注册登录。
 
-**在线使用**：https://chenlingfan92-star.github.io/football-tactics-board/
+**在线使用**：https://c-linkfun.github.io/football-tactics-board/
 
 ## 适用场景
 
