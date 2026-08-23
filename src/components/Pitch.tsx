@@ -4,12 +4,18 @@ import { useDragStore } from '../store/dragStore'
 import { useEditStore } from '../store/editStore'
 import { useDemoStore } from '../store/demoStore'
 import { useToolStore, type Draft } from '../store/toolStore'
-import { nearestFieldSlot, pointInPitch, pointInZone } from '../drag'
+import { nearestFieldSlot, pointInPitch, pointInZone, toDisplay } from '../drag'
 import { hitArrow, hitText, hitZone } from '../draw'
 import { demoFrameState } from '../demos'
 import { findFormation, mirroredLayout, suggestPosition } from '../formations'
 import { POSITION_COLOR } from '../positions'
-import type { ArrowDef, FieldSlot, TextDef, XY, ZoneDef } from '../types'
+import type {
+  ArrowDef,
+  FieldSlot,
+  TextDef,
+  XY,
+  ZoneDef,
+} from '../types'
 import PlayerToken from './PlayerToken'
 import NameModal from './NameModal'
 import DemoPanel from './DemoPanel'
@@ -51,36 +57,61 @@ function SoccerBall() {
   )
 }
 
-/** 标准足球场（105m × 68m）俯视图 */
-function PitchMarkings() {
-  const line = { fill: 'none', stroke: 'rgba(255,255,255,0.9)', strokeWidth: 0.7 }
-  const dot = { fill: 'rgba(255,255,255,0.9)' }
+const LINE = { fill: 'none', stroke: 'rgba(255,255,255,0.9)', strokeWidth: 0.7 }
+const DOT = { fill: 'rgba(255,255,255,0.9)' }
+
+/** 横屏球场标线（105m × 68m 俯视图，本方球门在左） */
+function LandscapeMarkings() {
   return (
     <svg className="pitch-lines" viewBox="0 0 105 68" preserveAspectRatio="none">
-      {/* 边线 */}
-      <rect x="0.5" y="0.5" width="104" height="67" {...line} />
-      {/* 中线 + 中圈 */}
-      <line x1="52.5" y1="0.5" x2="52.5" y2="67.5" {...line} />
-      <circle cx="52.5" cy="34" r="9.15" {...line} />
-      <circle cx="52.5" cy="34" r="0.8" {...dot} />
-      {/* 左禁区 / 小禁区 / 点球点 / 禁区弧 */}
-      <rect x="0.5" y="13.84" width="16" height="40.32" {...line} />
-      <rect x="0.5" y="24.84" width="5" height="18.32" {...line} />
-      <circle cx="11" cy="34" r="0.8" {...dot} />
-      <path d="M 16.5 26.69 A 9.15 9.15 0 0 1 16.5 41.31" {...line} />
-      {/* 右禁区 / 小禁区 / 点球点 / 禁区弧 */}
-      <rect x="88.5" y="13.84" width="16" height="40.32" {...line} />
-      <rect x="99.5" y="24.84" width="5" height="18.32" {...line} />
-      <circle cx="94" cy="34" r="0.8" {...dot} />
-      <path d="M 88.5 26.69 A 9.15 9.15 0 0 0 88.5 41.31" {...line} />
-      {/* 角旗弧 */}
-      <path d="M 0.5 1.5 A 1 1 0 0 1 1.5 0.5" {...line} />
-      <path d="M 103.5 0.5 A 1 1 0 0 1 104.5 1.5" {...line} />
-      <path d="M 1.5 67.5 A 1 1 0 0 1 0.5 66.5" {...line} />
-      <path d="M 104.5 66.5 A 1 1 0 0 1 103.5 67.5" {...line} />
-      {/* 球门（粗线表示球门线位置） */}
+      <rect x="0.5" y="0.5" width="104" height="67" {...LINE} />
+      <line x1="52.5" y1="0.5" x2="52.5" y2="67.5" {...LINE} />
+      <circle cx="52.5" cy="34" r="9.15" {...LINE} />
+      <circle cx="52.5" cy="34" r="0.8" {...DOT} />
+      <rect x="0.5" y="13.84" width="16" height="40.32" {...LINE} />
+      <rect x="0.5" y="24.84" width="5" height="18.32" {...LINE} />
+      <circle cx="11" cy="34" r="0.8" {...DOT} />
+      <path d="M 16.5 26.69 A 9.15 9.15 0 0 1 16.5 41.31" {...LINE} />
+      <rect x="88.5" y="13.84" width="16" height="40.32" {...LINE} />
+      <rect x="99.5" y="24.84" width="5" height="18.32" {...LINE} />
+      <circle cx="94" cy="34" r="0.8" {...DOT} />
+      <path d="M 88.5 26.69 A 9.15 9.15 0 0 0 88.5 41.31" {...LINE} />
+      <path d="M 0.5 1.5 A 1 1 0 0 1 1.5 0.5" {...LINE} />
+      <path d="M 103.5 0.5 A 1 1 0 0 1 104.5 1.5" {...LINE} />
+      <path d="M 1.5 67.5 A 1 1 0 0 1 0.5 66.5" {...LINE} />
+      <path d="M 104.5 66.5 A 1 1 0 0 1 103.5 67.5" {...LINE} />
       <line x1="0.5" y1="30.34" x2="0.5" y2="37.66" stroke="rgba(255,255,255,0.9)" strokeWidth="1.6" />
       <line x1="104.5" y1="30.34" x2="104.5" y2="37.66" stroke="rgba(255,255,255,0.9)" strokeWidth="1.6" />
+    </svg>
+  )
+}
+
+/** 竖屏球场标线（旋转 90°，本方球门在下方，向上进攻） */
+function PortraitMarkings() {
+  return (
+    <svg className="pitch-lines" viewBox="0 0 68 105" preserveAspectRatio="none">
+      <rect x="0.5" y="0.5" width="67" height="104" {...LINE} />
+      <line x1="0.5" y1="52.5" x2="67.5" y2="52.5" {...LINE} />
+      <circle cx="34" cy="52.5" r="9.15" {...LINE} />
+      <circle cx="34" cy="52.5" r="0.8" {...DOT} />
+      {/* 下方禁区（本方） */}
+      <rect x="13.84" y="83.5" width="40.32" height="16" {...LINE} />
+      <rect x="24.84" y="94.5" width="18.32" height="5" {...LINE} />
+      <circle cx="34" cy="89" r="0.8" {...DOT} />
+      <path d="M 26.69 83.5 A 9.15 9.15 0 0 0 41.31 83.5" {...LINE} />
+      {/* 上方禁区（对方） */}
+      <rect x="13.84" y="0.5" width="40.32" height="16" {...LINE} />
+      <rect x="24.84" y="0.5" width="18.32" height="5" {...LINE} />
+      <circle cx="34" cy="6" r="0.8" {...DOT} />
+      <path d="M 26.69 11.5 A 9.15 9.15 0 0 1 41.31 11.5" {...LINE} />
+      {/* 角旗弧 */}
+      <path d="M 0.5 1.5 A 1 1 0 0 1 1.5 0.5" {...LINE} />
+      <path d="M 66.5 0.5 A 1 1 0 0 1 67.5 1.5" {...LINE} />
+      <path d="M 1.5 104.5 A 1 1 0 0 1 0.5 103.5" {...LINE} />
+      <path d="M 67.5 103.5 A 1 1 0 0 1 66.5 104.5" {...LINE} />
+      {/* 球门 */}
+      <line x1="30.34" y1="99.5" x2="37.66" y2="99.5" stroke="rgba(255,255,255,0.9)" strokeWidth="1.6" />
+      <line x1="30.34" y1="0.5" x2="37.66" y2="0.5" stroke="rgba(255,255,255,0.9)" strokeWidth="1.6" />
     </svg>
   )
 }
@@ -120,7 +151,7 @@ function Arrow({ a }: { a: ArrowDef }) {
   )
 }
 
-/** 战术叠加层：高亮区域 + 箭头（SVG），文字标注（HTML） */
+/** 战术叠加层：高亮区域 + 箭头（SVG），文字标注（HTML）；坐标均为显示坐标 */
 function TacticOverlay({
   arrows,
   zones,
@@ -175,9 +206,7 @@ function TacticOverlay({
           <Arrow key={a.id} a={a} />
         ))}
         {draft && draft.kind === 'arrow' && (
-          <Arrow
-            a={{ id: 'draft', type: draft.type, from: draft.start, to: draft.cur }}
-          />
+          <Arrow a={{ id: 'draft', type: draft.type, from: draft.start, to: draft.cur }} />
         )}
         {draft && draft.kind === 'zone' && (
           <rect
@@ -195,11 +224,7 @@ function TacticOverlay({
         )}
       </svg>
       {texts.map((t) => (
-        <div
-          key={t.id}
-          className="pitch-text"
-          style={{ left: `${t.x}%`, top: `${t.y}%` }}
-        >
+        <div key={t.id} className="pitch-text" style={{ left: `${t.x}%`, top: `${t.y}%` }}>
           {t.text}
         </div>
       ))}
@@ -216,6 +241,7 @@ export default function Pitch() {
   const customElements = useBoardStore((s) => s.customElements)
   const ball = useBoardStore((s) => s.ball)
   const activeDemo = useBoardStore((s) => s.activeDemo)
+  const orientation = useBoardStore((s) => s.pitchOrientation)
   const draggingId = useDragStore((s) => s.draggingId)
   const tool = useToolStore((s) => s.tool)
   const draft = useToolStore((s) => s.draft)
@@ -227,7 +253,23 @@ export default function Pitch() {
   const previewIndex = useDemoStore((s) => s.previewIndex)
   const [textPoint, setTextPoint] = useState<XY | null>(null)
 
-  /** 演示视图：播放中或预览帧时覆盖实时状态 */
+  /** 数据坐标 → 显示坐标 */
+  const disp = (p: XY): XY => toDisplay(p, orientation)
+  const mapArrow = (a: ArrowDef): ArrowDef => ({ ...a, from: disp(a.from), to: disp(a.to) })
+  const mapZone = (z: ZoneDef): ZoneDef => {
+    const tl = disp({ x: z.x, y: z.y })
+    const br = disp({ x: z.x + z.w, y: z.y + z.h })
+    return {
+      ...z,
+      x: Math.min(tl.x, br.x),
+      y: Math.min(tl.y, br.y),
+      w: Math.abs(br.x - tl.x),
+      h: Math.abs(br.y - tl.y),
+    }
+  }
+  const mapText = (t: TextDef): TextDef => ({ ...t, ...disp(t) })
+
+  /** 演示视图：播放中或预览帧时覆盖实时状态（数据坐标） */
   let demoView: {
     positions: Map<string, XY>
     ball: XY | null
@@ -242,28 +284,27 @@ export default function Pitch() {
     }
   }
 
-  const overlayArrows = demoView
+  const overlayArrows = (demoView
     ? demoView.arrows
     : [...activeTactics.flatMap((t) => t.arrows), ...customElements.arrows]
-  const overlayZones = [...activeTactics.flatMap((t) => t.zones), ...customElements.zones]
-  const overlayTexts = [...activeTactics.flatMap((t) => t.texts), ...customElements.texts]
+  ).map(mapArrow)
+  const overlayZones = [
+    ...activeTactics.flatMap((t) => t.zones),
+    ...customElements.zones,
+  ].map(mapZone)
+  const overlayTexts = [
+    ...activeTactics.flatMap((t) => t.texts),
+    ...customElements.texts,
+  ].map(mapText)
+  const draftMapped = draft
+    ? { ...draft, start: disp(draft.start), cur: disp(draft.cur) }
+    : null
   // 足球常驻球场：演示视图用帧内球位，否则用实时位置（老数据没有则为中圈开球点）
-  const shownBall = demoView ? demoView.ball : (ball ?? { x: 50, y: 50 })
-  const slotPos = (slot: FieldSlot): XY => demoView?.positions.get(slot.playerId) ?? slot
-
-  /** 足球拖拽（演示播放中不可拖） */
-  const onBallPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
-    if (useDemoStore.getState().mode === 'play') return
-    e.preventDefault()
-    useDemoStore.getState().clearPreview()
-    const move = (ev: PointerEvent) => {
-      const p = pointInPitch(ev.clientX, ev.clientY)
-      if (p) useBoardStore.getState().setBall(p.x, p.y)
-    }
-    const up = () => window.removeEventListener('pointermove', move)
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up, { once: true })
+  const shownBallData = demoView ? demoView.ball : (ball ?? { x: 50, y: 50 })
+  const shownBall = shownBallData ? disp(shownBallData) : null
+  const slotPos = (slot: FieldSlot): XY => {
+    const data = demoView?.positions.get(slot.playerId) ?? slot
+    return disp(data)
   }
 
   /** 橡皮擦：删除命中的第一个元素 */
@@ -274,9 +315,15 @@ export default function Pitch() {
     const s = useBoardStore.getState()
     const entries: Array<{ id: string; hit: boolean }> = []
     const collect = (arrows: ArrowDef[], zones: ZoneDef[], texts: TextDef[]) => {
-      for (const a of arrows) entries.push({ id: a.id, hit: hitArrow(clientX, clientY, a, rect) })
-      for (const z of zones) entries.push({ id: z.id, hit: hitZone(clientX, clientY, z, rect) })
-      for (const t of texts) entries.push({ id: t.id, hit: hitText(clientX, clientY, t, rect) })
+      for (const a of arrows) {
+        entries.push({ id: a.id, hit: hitArrow(clientX, clientY, a, rect, orientation) })
+      }
+      for (const z of zones) {
+        entries.push({ id: z.id, hit: hitZone(clientX, clientY, z, rect, orientation) })
+      }
+      for (const t of texts) {
+        entries.push({ id: t.id, hit: hitText(clientX, clientY, t, rect, orientation) })
+      }
     }
     for (const t of s.activeTactics) collect(t.arrows, t.zones, t.texts)
     collect(s.customElements.arrows, s.customElements.zones, s.customElements.texts)
@@ -289,7 +336,7 @@ export default function Pitch() {
     if (e.button !== 0 || tool === 'select') return
     if ((e.target as HTMLElement).closest('.player-token')) return
     e.preventDefault()
-    const p = pointInPitch(e.clientX, e.clientY)
+    const p = pointInPitch(e.clientX, e.clientY, orientation)
     if (!p) return
 
     if (tool === 'eraser') {
@@ -305,7 +352,7 @@ export default function Pitch() {
     const draftType = tool === 'pass' ? 'pass' : 'run'
     setDraft({ kind: draftKind, type: draftType, start: p, cur: p })
     const move = (ev: PointerEvent) => {
-      const cp = pointInPitch(ev.clientX, ev.clientY)
+      const cp = pointInPitch(ev.clientX, ev.clientY, orientation)
       if (cp) {
         const d = useToolStore.getState().draft
         if (d) useToolStore.getState().setDraft({ ...d, cur: cp })
@@ -314,7 +361,7 @@ export default function Pitch() {
     const up = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move)
       const d = useToolStore.getState().draft
-      const cp = pointInPitch(ev.clientX, ev.clientY) ?? p
+      const cp = pointInPitch(ev.clientX, ev.clientY, orientation) ?? p
       useToolStore.getState().setDraft(null)
       if (!d) return
       if (d.kind === 'arrow') {
@@ -338,6 +385,21 @@ export default function Pitch() {
     window.addEventListener('pointerup', up, { once: true })
   }
 
+  /** 足球拖拽（演示播放中不可拖） */
+  const onBallPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    if (useDemoStore.getState().mode === 'play') return
+    e.preventDefault()
+    useDemoStore.getState().clearPreview()
+    const move = (ev: PointerEvent) => {
+      const p = pointInPitch(ev.clientX, ev.clientY, orientation)
+      if (p) useBoardStore.getState().setBall(p.x, p.y)
+    }
+    const up = () => window.removeEventListener('pointermove', move)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up, { once: true })
+  }
+
   /** 我方球员拖拽：换位 / 换人；原地点击打开编辑 */
   const onFieldPointerDown = (e: React.PointerEvent, playerId: string) => {
     if (e.button !== 0 || tool !== 'select') return
@@ -348,7 +410,7 @@ export default function Pitch() {
     useDragStore.getState().startFieldDrag(playerId)
 
     const move = (ev: PointerEvent) => {
-      const p = pointInPitch(ev.clientX, ev.clientY)
+      const p = pointInPitch(ev.clientX, ev.clientY, orientation)
       if (p) useBoardStore.getState().updateSlot(playerId, p.x, p.y)
       useDragStore.getState().move(pointInZone('[data-bench]', ev.clientX, ev.clientY))
     }
@@ -370,6 +432,7 @@ export default function Pitch() {
           ev.clientY,
           playerId,
           useBoardStore.getState().field.map((s) => ({ key: s.playerId, x: s.x, y: s.y })),
+          orientation,
         )
         if (other) {
           useBoardStore.getState().swapSlots(playerId, other)
@@ -377,7 +440,7 @@ export default function Pitch() {
           // 落点自动建议位置标签（按当前阵型最近角色）
           const board = useBoardStore.getState()
           const formation = findFormation(board.formationId, board.customFormations)
-          const p = pointInPitch(ev.clientX, ev.clientY)
+          const p = pointInPitch(ev.clientX, ev.clientY, orientation)
           if (formation && p) {
             board.setSlotPosition(playerId, suggestPosition(p.x, p.y, formation.layout))
           }
@@ -399,7 +462,7 @@ export default function Pitch() {
     useDragStore.getState().startFieldDrag(oppId)
 
     const move = (ev: PointerEvent) => {
-      const p = pointInPitch(ev.clientX, ev.clientY)
+      const p = pointInPitch(ev.clientX, ev.clientY, orientation)
       if (p) useBoardStore.getState().oppUpdateSlot(oppId, p.x, p.y)
     }
     const up = (ev: PointerEvent) => {
@@ -416,6 +479,7 @@ export default function Pitch() {
         ev.clientY,
         oppId,
         useBoardStore.getState().oppField.map((s) => ({ key: s.id, x: s.x, y: s.y })),
+        orientation,
       )
       if (other) {
         useBoardStore.getState().oppSwapSlots(oppId, other)
@@ -423,7 +487,7 @@ export default function Pitch() {
         // 落点自动建议位置标签（按对方阵型的镜像点位）
         const board = useBoardStore.getState()
         const formation = findFormation(board.oppFormationId, [])
-        const p = pointInPitch(ev.clientX, ev.clientY)
+        const p = pointInPitch(ev.clientX, ev.clientY, orientation)
         if (formation && p) {
           board.oppSetSlotPosition(oppId, suggestPosition(p.x, p.y, mirroredLayout(formation)))
         }
@@ -437,12 +501,12 @@ export default function Pitch() {
   return (
     <div className="pitch-wrap">
       <div
-        className={`pitch${tool !== 'select' ? ' drawing' : ''}${demoMode === 'play' ? ' demo-playing' : ''}`}
+        className={`pitch${orientation === 'portrait' ? ' portrait' : ''}${tool !== 'select' ? ' drawing' : ''}${demoMode === 'play' ? ' demo-playing' : ''}`}
         data-pitch
         onPointerDown={onPitchPointerDown}
       >
-        <PitchMarkings />
-        <TacticOverlay arrows={overlayArrows} zones={overlayZones} texts={overlayTexts} draft={draft} />
+        {orientation === 'portrait' ? <PortraitMarkings /> : <LandscapeMarkings />}
+        <TacticOverlay arrows={overlayArrows} zones={overlayZones} texts={overlayTexts} draft={draftMapped} />
         {/* 对方球员在下层 */}
         {mode === 'both' &&
           oppField.map((slot) => (
@@ -451,8 +515,8 @@ export default function Pitch() {
               number={slot.number}
               position={slot.position}
               color={OPP_COLOR}
-              x={slot.x}
-              y={slot.y}
+              x={disp(slot).x}
+              y={disp(slot).y}
               team="opp"
               dragging={draggingId === slot.id}
               onPointerDown={(e) => onOppPointerDown(e, slot.id)}

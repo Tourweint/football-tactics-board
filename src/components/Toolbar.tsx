@@ -3,6 +3,7 @@ import { toPng } from 'html-to-image'
 import { useBoardStore } from '../store/boardStore'
 import { useDemoStore } from '../store/demoStore'
 import { useToolStore, type DrawTool } from '../store/toolStore'
+import { useUIStore } from '../store/uiStore'
 import { findFormation, PRESET_FORMATIONS } from '../formations'
 import { PRESET_TACTICS, TACTIC_TYPE_LABELS } from '../tactics'
 import NameModal from './NameModal'
@@ -18,7 +19,7 @@ const DRAW_TOOLS: Array<{ id: DrawTool; label: string; title: string }> = [
 ]
 
 /** 顶部工具栏：模式切换 + 阵型 + 方案 + 导出 / 战术库 + 绘制 + 演示 + 撤销 */
-export default function Toolbar({ onToggleRoster }: { onToggleRoster: () => void }) {
+export default function Toolbar() {
   const mode = useBoardStore((s) => s.mode)
   const setMode = useBoardStore((s) => s.setMode)
   const formationId = useBoardStore((s) => s.formationId)
@@ -52,6 +53,11 @@ export default function Toolbar({ onToggleRoster }: { onToggleRoster: () => void
   const demoOpen = useDemoStore((s) => s.demoOpen)
   const openDemo = useDemoStore((s) => s.open)
   const closeDemo = useDemoStore((s) => s.close)
+  const orientation = useBoardStore((s) => s.pitchOrientation)
+  const setOrientation = useBoardStore((s) => s.setPitchOrientation)
+  const toolsOpen = useUIStore((s) => s.toolsOpen)
+  const toggleTools = useUIStore((s) => s.toggleTools)
+  const toggleRoster = useUIStore((s) => s.toggleRoster)
 
   const [nameModal, setNameModal] = useState<{
     title: string
@@ -172,7 +178,7 @@ export default function Toolbar({ onToggleRoster }: { onToggleRoster: () => void
         </div>
 
         <div className="toolbar-actions">
-          <button className="tool-btn roster-toggle" title="球队花名册" onClick={onToggleRoster}>
+          <button className="tool-btn" title="收起/展开球队花名册" onClick={toggleRoster}>
             ☰ 花名册
           </button>
           <div className="mode-switch">
@@ -325,9 +331,32 @@ export default function Toolbar({ onToggleRoster }: { onToggleRoster: () => void
           <button className="tool-btn primary" onClick={exportPng} title="把战术板导出为 PNG 图片">
             导出 PNG
           </button>
+
+          <button
+            className="tool-btn"
+            title={
+              orientation === 'landscape'
+                ? '把球场切换为竖屏显示（适合手机）'
+                : '把球场切换为横屏显示'
+            }
+            onClick={() =>
+              setOrientation(orientation === 'landscape' ? 'portrait' : 'landscape')
+            }
+          >
+            {orientation === 'landscape' ? '↻ 竖屏' : '↻ 横屏'}
+          </button>
+
+          <button
+            className="tool-btn"
+            title="收起/展开战术与绘制功能区"
+            onClick={toggleTools}
+          >
+            {toolsOpen ? '▲ 功能区' : '▼ 功能区'}
+          </button>
         </div>
       </div>
 
+      {toolsOpen && (
       <div className="toolbar-row second">
         <div className="tool-group">
           <span className="tool-label">战术</span>
@@ -422,6 +451,7 @@ export default function Toolbar({ onToggleRoster }: { onToggleRoster: () => void
           </button>
         </div>
       </div>
+      )}
 
       {nameModal && (
         <NameModal

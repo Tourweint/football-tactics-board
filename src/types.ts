@@ -52,6 +52,9 @@ export interface XY {
   y: number
 }
 
+/** 球场显示方向：横屏（默认）/ 竖屏（旋转 90°，适合手机） */
+export type PitchOrientation = 'landscape' | 'portrait'
+
 /** 箭头类型：pass 传球（实线）/ run 跑位（虚线） */
 export type ArrowType = 'pass' | 'run'
 

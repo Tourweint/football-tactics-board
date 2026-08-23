@@ -7,6 +7,7 @@ import type {
   FieldSlot,
   Formation,
   OppSlot,
+  PitchOrientation,
   Plan,
   PlanState,
   Player,
@@ -104,6 +105,8 @@ function cloneTactic(t: Tactic): Tactic {
 interface BoardState {
   /** 展示模式 */
   mode: BoardMode
+  /** 球场显示方向（视图偏好，不入撤销历史/方案快照） */
+  pitchOrientation: PitchOrientation
   /** 我方全部球员（花名册） */
   players: Player[]
   /** 我方场上 11 个槽位 */
@@ -140,6 +143,8 @@ interface BoardState {
   _future: BoardSnapshot[]
 
   setMode: (mode: BoardMode) => void
+  /** 切换球场显示方向（横屏/竖屏） */
+  setPitchOrientation: (orientation: PitchOrientation) => void
   /** 撤销一步 */
   undo: () => void
   /** 重做一步 */
@@ -236,6 +241,7 @@ const DEFAULT_BALL: XY = { x: 50, y: 50 }
 function defaultState() {
   return {
     mode: 'own' as BoardMode,
+    pitchOrientation: 'landscape' as PitchOrientation,
     players: DEFAULT_PLAYERS,
     field: seedField(),
     bench: DEFAULT_PLAYERS.slice(11).map((p) => p.id),
@@ -291,6 +297,8 @@ export const useBoardStore = create<BoardState>()(
         _future: [],
 
         setMode: (mode) => mutate(() => ({ mode })),
+
+      setPitchOrientation: (orientation) => set({ pitchOrientation: orientation }),
 
         undo: () =>
           set((s) => {
@@ -805,6 +813,7 @@ export const useBoardStore = create<BoardState>()(
       // 历史栈不持久化
       partialize: (s) => ({
         mode: s.mode,
+        pitchOrientation: s.pitchOrientation,
         players: s.players,
         field: s.field,
         bench: s.bench,

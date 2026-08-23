@@ -1,17 +1,12 @@
 import { useRef, useState } from 'react'
 import { useBoardStore } from '../store/boardStore'
 import { useEditStore } from '../store/editStore'
+import { useUIStore } from '../store/uiStore'
 import { POSITION_COLOR, POSITION_GROUPS, POSITION_LABEL } from '../positions'
 import type { Position } from '../types'
 
 /** 左侧花名册：按位置分组展示全队，可添加/编辑/删除球员（移动端为抽屉） */
-export default function RosterPanel({
-  open,
-  onClose,
-}: {
-  open?: boolean
-  onClose?: () => void
-}) {
+export default function RosterPanel() {
   const players = useBoardStore((s) => s.players)
   const field = useBoardStore((s) => s.field)
   const addPlayer = useBoardStore((s) => s.addPlayer)
@@ -58,8 +53,8 @@ export default function RosterPanel({
   })).filter((g) => g.members.length > 0)
 
   return (
-    <aside className={`roster${open ? ' open' : ''}`}>
-      <button className="roster-close" onClick={onClose} title="关闭花名册">
+    <aside className="roster">
+      <button className="roster-close" onClick={() => useUIStore.getState().setRosterOpen(false)} title="关闭花名册">
         ✕
       </button>
       <h2 className="panel-title">球队花名册</h2>

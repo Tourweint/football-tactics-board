@@ -122,10 +122,6 @@ select:focus-visible {
   transform: scale(0.97);
 }
 
-.roster-toggle {
-  display: none;
-}
-
 .tool-btn.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -549,9 +545,21 @@ select:focus-visible {
 .pitch-wrap {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 竖屏球场：旋转 90°，本方球门在下 */
+.pitch.portrait {
+  aspect-ratio: 68 / 105;
+  width: auto;
+  height: min(100%, 72vh);
+  max-width: 100%;
 }
 
 .pitch {
@@ -715,10 +723,6 @@ select:focus-visible {
 /* ---------- 移动端适配 ---------- */
 
 @media (max-width: 860px) {
-  .roster-toggle {
-    display: inline-block;
-  }
-
   .brand-sub {
     display: none;
   }
@@ -899,6 +903,22 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.bench-toggle {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 1px 7px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.bench-toggle:hover {
+  color: var(--text);
+  border-color: #374151;
 }
 
 .bench-hint {

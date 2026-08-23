@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useBoardStore } from './store/boardStore'
+import { useUIStore } from './store/uiStore'
 import Toolbar from './components/Toolbar'
 import RosterPanel from './components/RosterPanel'
 import Pitch from './components/Pitch'
@@ -8,8 +9,16 @@ import DragGhost from './components/DragGhost'
 import EditModal from './components/EditModal'
 
 export default function App() {
-  // 移动端花名册抽屉
-  const [rosterOpen, setRosterOpen] = useState(false)
+  const rosterOpen = useUIStore((s) => s.rosterOpen)
+  const setRosterOpen = useUIStore((s) => s.setRosterOpen)
+
+  // 移动端首次加载：默认竖屏球场 + 收起花名册（桌面保持横屏 + 展开）
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 860px)').matches) {
+      useBoardStore.getState().setPitchOrientation('portrait')
+      setRosterOpen(false)
+    }
+  }, [setRosterOpen])
 
   // Ctrl+Z / Ctrl+Y（Shift+Z）撤销重做；输入框内不拦截，交给浏览器原生行为
   useEffect(() => {
@@ -35,9 +44,9 @@ export default function App() {
 
   return (
     <div className="app">
-      <Toolbar onToggleRoster={() => setRosterOpen((v) => !v)} />
+      <Toolbar />
       <div className="main">
-        <RosterPanel open={rosterOpen} onClose={() => setRosterOpen(false)} />
+        {rosterOpen && <RosterPanel />}
         <Pitch />
       </div>
       <Bench />
