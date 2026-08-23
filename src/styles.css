@@ -1,0 +1,989 @@
+:root {
+  --bg: #0b1220;
+  --panel: #111827;
+  --border: #1f2937;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --accent: #22c55e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  overscroll-behavior: none;
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 焦点可见性 */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ---------- 顶部工具栏 ---------- */
+
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 20px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-row.second {
+  justify-content: flex-start;
+}
+
+.tool-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+.brand {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.brand-sub {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  margin-left: 10px;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tool-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tool-btn {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tool-btn:hover {
+  border-color: #374151;
+}
+
+.tool-btn:active,
+.draw-btn:active {
+  transform: scale(0.97);
+}
+
+.roster-toggle {
+  display: none;
+}
+
+.tool-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #052e16;
+  font-weight: 700;
+}
+
+.tool-btn.primary:hover {
+  filter: brightness(1.1);
+}
+
+.tool-btn.danger:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.tool-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.draw-btn {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.draw-btn:hover {
+  border-color: #374151;
+  color: var(--text);
+}
+
+.draw-btn.active {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tactic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 8px 3px 10px;
+  font-size: 12px;
+}
+
+.tactic-chip button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.tactic-chip button:hover {
+  color: #f87171;
+}
+
+.tool-group select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mode-switch {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.mode-switch button {
+  background: var(--bg);
+  color: var(--muted);
+  border: none;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mode-switch button.active {
+  background: var(--accent);
+  color: #052e16;
+  font-weight: 700;
+}
+
+/* ---------- 主区域 ---------- */
+
+.main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  gap: 16px;
+  padding: 16px;
+}
+
+.panel-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* ---------- 花名册 ---------- */
+
+.roster {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.roster-close {
+  display: none;
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.roster-backdrop {
+  display: none;
+}
+
+.add-player {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.add-player input,
+.add-player select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.add-player select {
+  grid-column: span 2;
+}
+
+.add-player button {
+  grid-column: span 2;
+  background: var(--accent);
+  color: #052e16;
+  border: none;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.add-player button:hover {
+  filter: brightness(1.1);
+}
+
+.roster-count {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.roster-group {
+  margin-bottom: 14px;
+}
+
+.roster-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+}
+
+.roster-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.roster-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.roster-name {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-badge {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+.roster-badge.starter {
+  color: var(--accent);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.roster-actions {
+  display: flex;
+  gap: 2px;
+  visibility: hidden;
+}
+
+.roster-row:hover .roster-actions {
+  visibility: visible;
+}
+
+.roster-error {
+  font-size: 12px;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+}
+
+/* ---------- 小图标按钮 ---------- */
+
+.icon-btn {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.icon-btn.danger:hover {
+  color: #f87171;
+}
+
+/* ---------- 编辑弹窗 ---------- */
+
+.modal-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal {
+  width: 320px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+}
+
+.modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modal-fields input,
+.modal-fields select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.modal-warn {
+  font-size: 12px;
+  color: #fbbf24;
+  margin-top: 10px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.modal-actions button {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-cancel {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border) !important;
+}
+
+.modal-save {
+  background: var(--accent);
+  color: #052e16;
+}
+
+.modal-save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- 球场 ---------- */
+
+.pitch-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.pitch {
+  position: relative;
+  width: 100%;
+  max-width: 920px;
+  aspect-ratio: 105 / 68;
+  border-radius: 8px;
+  background: repeating-linear-gradient(90deg, #2d8a3e 0 10%, #338f45 10% 20%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.pitch-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* 战术叠加层：位于球员上层（拖拽中的球员仍在其上） */
+.pitch-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.pitch-text {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+/* 绘制模式下球员不可拖拽（穿透点击，便于在球员上方绘制） */
+.pitch.drawing .player-token {
+  pointer-events: none;
+}
+
+/* 演示播放中球员与足球不可拖拽 */
+.pitch.demo-playing .player-token,
+.pitch.demo-playing .ball {
+  pointer-events: none;
+}
+
+/* ---------- 足球 ---------- */
+
+.ball {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  z-index: 4;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+}
+
+.ball-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.demo-note {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+/* ---------- 演示面板 ---------- */
+
+.demo-panel {
+  width: 100%;
+  max-width: 920px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.demo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.frame-chip {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.frame-chip:hover {
+  border-color: #374151;
+  color: var(--text);
+}
+
+.frame-chip.active {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.demo-note-input {
+  width: 240px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.demo-progress {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.speed-select {
+  margin-left: 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+/* ---------- 移动端适配 ---------- */
+
+@media (max-width: 860px) {
+  .roster-toggle {
+    display: inline-block;
+  }
+
+  .brand-sub {
+    display: none;
+  }
+
+  .main {
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  /* 花名册变为左侧抽屉 */
+  .roster {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 300;
+    width: 280px;
+    border-radius: 0;
+    border-left: none;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .roster.open {
+    transform: translateX(0);
+  }
+
+  .roster-close {
+    display: block;
+  }
+
+  .roster-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 290;
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  .pitch {
+    max-width: 100%;
+  }
+
+  .toolbar {
+    padding: 8px 10px;
+  }
+
+  .toolbar-row {
+    gap: 10px;
+  }
+
+  .tool-group {
+    gap: 4px;
+  }
+}
+
+/* ---------- 场上球员 ---------- */
+
+.player-token {
+  position: absolute;
+  width: 44px;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  z-index: 2;
+}
+
+.player-token:active {
+  cursor: grabbing;
+}
+
+.player-token.dragging {
+  z-index: 10;
+  scale: 1.15;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+}
+
+/* 对方球员在我方下层 */
+.player-token.opp {
+  z-index: 1;
+}
+
+/* ---------- 双方图例 ---------- */
+
+.pitch-legend {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.legend-dot:first-child {
+  margin-left: 0;
+}
+
+.legend-dot.own {
+  background: #3b82f6;
+}
+
+.legend-dot.opp {
+  background: #64748b;
+}
+
+.token-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: scale 0.15s ease;
+}
+
+.player-token:hover .token-circle {
+  scale: 1.06;
+}
+
+.token-pos {
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/* ---------- 替补席 ---------- */
+
+.bench {
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 10px 20px 12px;
+  max-height: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bench.over-bench {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+  background: rgba(34, 197, 94, 0.06);
+}
+
+.bench-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bench-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.bench.over-bench .bench-hint {
+  color: var(--accent);
+}
+
+.bench-cards {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.bench-card {
+  position: relative;
+  width: 72px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.bench-card:hover {
+  border-color: #374151;
+}
+
+.bench-card.dragging {
+  opacity: 0.35;
+}
+
+.bench-circle {
+  background: #475569;
+}
+
+.bench-name {
+  font-size: 11px;
+  color: var(--text);
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bench-actions {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  gap: 2px;
+  visibility: hidden;
+}
+
+.bench-card:hover .bench-actions {
+  visibility: visible;
+}
+
+.bench-empty {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 8px 0;
+}
+
+/* ---------- 拖拽幽灵 ---------- */
+
+.drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.ghost-circle {
+  background: #64748b;
+  opacity: 0.9;
+}
