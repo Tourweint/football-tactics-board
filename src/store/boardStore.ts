@@ -679,6 +679,7 @@ export const useBoardStore = create<BoardState>()(
 
         savePlan: (name) => {
           const s = get()
+          // 方案快照不含共享的演示库（demoLibrary 为全局资源，避免每个方案重复存储）
           const state = {
             mode: s.mode,
             players: s.players,
@@ -690,7 +691,6 @@ export const useBoardStore = create<BoardState>()(
             customFormations: s.customFormations,
             customElements: s.customElements,
             ball: s.ball,
-            demoLibrary: s.demoLibrary,
             activeDemo: s.activeDemo,
           }
           if (s.currentPlanId) {
@@ -715,11 +715,11 @@ export const useBoardStore = create<BoardState>()(
         loadPlan: (id) => {
           const plan = get().plans.find((p) => p.id === id)
           if (!plan) return
-          // 旧方案快照可能携带已移除的战术库字段，载入前剔除
-          const legacyState = plan.state as unknown as Record<string, unknown>
+          // 旧方案快照可能携带已移除的战术库字段，载入前剔除（浅拷贝，避免改动已保存的方案对象）
+          const legacyState = { ...plan.state } as unknown as Record<string, unknown>
           delete legacyState.customTactics
           delete legacyState.activeTactics
-          set({ ...plan.state, currentPlanId: id })
+          set({ ...(legacyState as Partial<BoardState>), currentPlanId: id })
         },
 
         deletePlan: (id) => {
@@ -753,12 +753,13 @@ export const useBoardStore = create<BoardState>()(
               texts: state.customElements?.texts ?? [],
             },
             ball: state.ball === undefined ? { x: 50, y: 50 } : state.ball,
-            demoLibrary: state.demoLibrary ?? [],
             activeDemo: state.activeDemo ?? null,
           }
-          // 旧版本导出可能携带已移除的战术库字段，忽略之
-          delete (merged as unknown as Record<string, unknown>).customTactics
-          delete (merged as unknown as Record<string, unknown>).activeTactics
+          // 旧版本导出可能携带已移除的战术库字段，忽略之；演示库为全局资源，不随方案导入
+          const legacy = merged as unknown as Record<string, unknown>
+          delete legacy.customTactics
+          delete legacy.activeTactics
+          delete legacy.demoLibrary
           const plan: Plan = {
             id: `plan-${crypto.randomUUID()}`,
             name,

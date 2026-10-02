@@ -133,7 +133,6 @@ export interface PlanState {
   customFormations: Formation[]
   customElements: CustomElements
   ball: XY | null
-  demoLibrary: TacticDemo[]
   activeDemo: TacticDemo | null
 }
 

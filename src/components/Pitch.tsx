@@ -25,6 +25,35 @@ const OPP_COLOR = '#64748b'
 /** 移动距离小于该像素值视为点击（打开编辑），否则视为拖拽 */
 const CLICK_THRESHOLD = 5
 
+/**
+ * 窗口级拖拽手势：pointerup/pointercancel 后自动注销全部监听（AbortController）。
+ * cancel 在手势被系统打断（如触屏浏览器接管）时执行状态复位，避免幽灵提交。
+ */
+function dragGesture(
+  move: (e: PointerEvent) => void,
+  up: (e: PointerEvent) => void,
+  cancel?: () => void,
+) {
+  const ac = new AbortController()
+  window.addEventListener('pointermove', move, { signal: ac.signal })
+  window.addEventListener(
+    'pointerup',
+    (e) => {
+      ac.abort()
+      up(e)
+    },
+    { once: true, signal: ac.signal },
+  )
+  window.addEventListener(
+    'pointercancel',
+    () => {
+      ac.abort()
+      cancel?.()
+    },
+    { once: true, signal: ac.signal },
+  )
+}
+
 /** 经典足球图标（白球 + 黑色五边形花纹） */
 function SoccerBall() {
   return (
@@ -402,11 +431,8 @@ export default function Pitch() {
     return disp(data)
   }
 
-  /** 橡皮擦：删除命中的第一个元素 */
-  const eraseAt = (clientX: number, clientY: number) => {
-    const pitch = document.querySelector<HTMLElement>('[data-pitch]')
-    if (!pitch) return
-    const rect = pitch.getBoundingClientRect()
+  /** 橡皮擦：删除命中的第一个元素（rect 由调用方在手势开始时取一次，手势内不变） */
+  const eraseAt = (clientX: number, clientY: number, rect: DOMRect) => {
     const s = useBoardStore.getState()
     const entries: Array<{ id: string; hit: boolean }> = []
     const collect = (
@@ -471,22 +497,17 @@ export default function Pitch() {
     if (!p) return
 
     if (tool === 'eraser') {
+      const pitchRect = document.querySelector<HTMLElement>('[data-pitch]')?.getBoundingClientRect()
+      if (!pitchRect) return
       // 橡皮：单击擦除，按住拖动可连续擦除（经过即擦）
-      eraseAt(e.clientX, e.clientY)
+      eraseAt(e.clientX, e.clientY, pitchRect)
       let last = { x: e.clientX, y: e.clientY }
       const move = (ev: PointerEvent) => {
         if (Math.hypot(ev.clientX - last.x, ev.clientY - last.y) < 6) return
         last = { x: ev.clientX, y: ev.clientY }
-        eraseAt(ev.clientX, ev.clientY)
+        eraseAt(ev.clientX, ev.clientY, pitchRect)
       }
-      const stop = () => {
-        window.removeEventListener('pointermove', move)
-        window.removeEventListener('pointerup', stop)
-        window.removeEventListener('pointercancel', stop)
-      }
-      window.addEventListener('pointermove', move)
-      window.addEventListener('pointerup', stop, { once: true })
-      window.addEventListener('pointercancel', stop, { once: true })
+      dragGesture(move, () => {})
       return
     }
     if (tool === 'text') {
@@ -517,7 +538,6 @@ export default function Pitch() {
       }
     }
     const up = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', move)
       const d = useToolStore.getState().draft
       const cp = pointInPitch(ev.clientX, ev.clientY, orientation) ?? p
       useToolStore.getState().setDraft(null)
@@ -539,8 +559,7 @@ export default function Pitch() {
         })
       }
     }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up, { once: true })
+    dragGesture(move, up, () => useToolStore.getState().setDraft(null))
   }
 
   /** 弧线悬停预览：指针位置作为预览终点/弯点 */
@@ -561,9 +580,7 @@ export default function Pitch() {
       const p = pointInPitch(ev.clientX, ev.clientY, orientation)
       if (p) useBoardStore.getState().setBall(p.x, p.y)
     }
-    const up = () => window.removeEventListener('pointermove', move)
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up, { once: true })
+    dragGesture(move, () => {})
   }
 
   /** 我方球员拖拽：换位 / 换人；原地点击打开编辑 */
@@ -581,7 +598,6 @@ export default function Pitch() {
       useDragStore.getState().move(pointInZone('[data-bench]', ev.clientX, ev.clientY))
     }
     const up = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', move)
       if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < CLICK_THRESHOLD) {
         // 原地点击 → 编辑球员
         useDragStore.getState().clear()
@@ -606,8 +622,7 @@ export default function Pitch() {
       }
       useDragStore.getState().clear()
     }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up, { once: true })
+    dragGesture(move, up, () => useDragStore.getState().clear())
   }
 
   /** 对方球员拖拽：仅场内自由换位；原地点击打开编辑 */
@@ -624,7 +639,6 @@ export default function Pitch() {
       if (p) useBoardStore.getState().oppUpdateSlot(oppId, p.x, p.y)
     }
     const up = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', move)
       if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < CLICK_THRESHOLD) {
         // 原地点击 → 编辑对方球员
         useDragStore.getState().clear()
@@ -644,8 +658,7 @@ export default function Pitch() {
       }
       useDragStore.getState().clear()
     }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up, { once: true })
+    dragGesture(move, up, () => useDragStore.getState().clear())
   }
 
   return (

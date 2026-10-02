@@ -189,7 +189,6 @@ export default function Toolbar() {
       customFormations: s.customFormations,
       customElements: s.customElements,
       ball: s.ball,
-      demoLibrary: s.demoLibrary,
       activeDemo: s.activeDemo,
     }
     const json = JSON.stringify({ name: currentPlan?.name ?? '战术方案', version: 1, state }, null, 2)
