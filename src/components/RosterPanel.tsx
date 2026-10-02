@@ -27,28 +27,42 @@ export default function RosterPanel() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    const n = parseInt(number, 10)
-    if (!name.trim() || !Number.isFinite(n) || n < 1 || n > 999) return
-    addPlayer(name.trim(), n, [pos])
+    const trimmed = name.trim()
+    if (!trimmed) {
+      showError('请先填写球员姓名')
+      return
+    }
+    let n = parseInt(number, 10)
+    if (!Number.isFinite(n) || n < 1 || n > 999) {
+      if (number.trim() !== '') {
+        showError('号码需为 1-999 的数字')
+        return
+      }
+      // 号码留空：自动分配未占用的最大号码 + 1
+      n = players.reduce((m, p) => Math.max(m, p.number), 0) + 1
+      if (n > 999) {
+        showError('号码已用尽（1-999），请手动指定')
+        return
+      }
+    }
+    addPlayer(trimmed, n, [pos])
     setName('')
     setNumber('')
   }
 
   const onRemove = (id: string, isStarter: boolean) => {
-    const ok = removePlayer(id)
-    if (!ok) showError('替补席已空，无法删除场上球员（请先添加替补）')
-    else if (isStarter) showError('已删除，替补席第一人自动顶上')
+    removePlayer(id)
+    if (isStarter) showError('已从名单删除，场上少一人（Ctrl+Z 可撤销）')
   }
 
-  /** 场上球员按当前站位分组，替补按偏好位置分组 */
+  /** 颜色与分组统一按球员角色（偏好位置），与场上站位无关 */
   const fieldPosition = new Map(field.map((s) => [s.playerId, s.position]))
-  const actualPos = (playerId: string, preferred: Position[]): Position =>
-    fieldPosition.get(playerId) ?? preferred[0] ?? 'ST'
+  const roleOf = (preferred: Position[]): Position => preferred[0] ?? 'ST'
 
   const groups = POSITION_GROUPS.map((group) => ({
     group,
     members: players.filter((p) =>
-      group.positions.includes(actualPos(p.id, p.preferredPositions)),
+      group.positions.includes(roleOf(p.preferredPositions)),
     ),
   })).filter((g) => g.members.length > 0)
 
@@ -97,7 +111,7 @@ export default function RosterPanel() {
           </div>
           {members.map((p) => {
             const isStarter = fieldPosition.has(p.id)
-            const color = POSITION_COLOR[actualPos(p.id, p.preferredPositions)]
+            const color = POSITION_COLOR[roleOf(p.preferredPositions)]
             return (
               <div className="roster-row" key={p.id}>
                 <span className="roster-num" style={{ backgroundColor: color }}>
@@ -117,7 +131,7 @@ export default function RosterPanel() {
                   </button>
                   <button
                     className="icon-btn danger"
-                    title={isStarter ? '删除（替补第一人自动顶上）' : '删除球员'}
+                    title="从名单删除（可撤销）"
                     onClick={() => onRemove(p.id, isStarter)}
                   >
                     ×

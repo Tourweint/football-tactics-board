@@ -4,6 +4,7 @@ import { useEditStore } from '../store/editStore'
 import { useToolStore } from '../store/toolStore'
 import { useUIStore } from '../store/uiStore'
 import { pointInPitch, pointInZone } from '../drag'
+import { POSITION_COLOR } from '../positions'
 
 /** 替补席：不限人数，可拖拽球员上场，可编辑/删除球员 */
 export default function Bench() {
@@ -37,7 +38,32 @@ export default function Bench() {
       window.removeEventListener('pointermove', move)
       if (!pointInZone('[data-bench]', ev.clientX, ev.clientY)) {
         const p = pointInPitch(ev.clientX, ev.clientY, orientation)
-        if (p) useBoardStore.getState().bringOn(playerId, p.x, p.y)
+        if (p) {
+          // 场上满 11 人时：只有拖拽球员（约 40px 圆）与场上球员图标有部分重叠才顶替
+          // 重叠面积最大的那名球员；拖到空白处不替换，球员留在替补席
+          const R = 20
+          const gr = {
+            left: ev.clientX - R,
+            right: ev.clientX + R,
+            top: ev.clientY - R,
+            bottom: ev.clientY + R,
+          }
+          let targetId: string | undefined
+          let bestArea = 0
+          document
+            .querySelectorAll<HTMLElement>('.player-token:not(.opp)')
+            .forEach((t) => {
+              const tr = t.getBoundingClientRect()
+              const w = Math.min(gr.right, tr.right) - Math.max(gr.left, tr.left)
+              const h = Math.min(gr.bottom, tr.bottom) - Math.max(gr.top, tr.top)
+              const area = Math.max(0, w) * Math.max(0, h)
+              if (area > bestArea) {
+                bestArea = area
+                targetId = t.getAttribute('data-token-id') ?? undefined
+              }
+            })
+          useBoardStore.getState().bringOn(playerId, p.x, p.y, targetId)
+        }
       }
       useDragStore.getState().clear()
     }
@@ -53,7 +79,9 @@ export default function Bench() {
         </button>
         {mode === 'both' ? '我方替补席' : '替补席'} · {bench.length} 人
         <span className="bench-hint">
-          {overBench ? '松开 → 换下（替补席第一人自动顶上）' : '拖拽球员到场上换人'}
+          {overBench
+            ? '松开 → 移回替补席（场上少一人，可撤销）'
+            : '拖到场上覆盖某名球员可顶替他；场上不足 11 人时直接补位'}
         </span>
       </div>
       {benchOpen && (
@@ -66,10 +94,16 @@ export default function Bench() {
             <div
               key={id}
               className={`bench-card${dragging ? ' dragging' : ''}`}
+              data-bench-card={id}
               onPointerDown={(e) => onBenchPointerDown(e, id)}
-              title={`${player.name} · ${player.number}号`}
+              title={`${player.name} · ${player.number}号（拖到场上换人；把场上球员拖到这张卡片上可与其互换）`}
             >
-              <div className="token-circle bench-circle">{player.number}</div>
+              <div
+                className="token-circle bench-circle"
+                style={{ backgroundColor: POSITION_COLOR[player.preferredPositions[0] ?? 'ST'] }}
+              >
+                {player.number}
+              </div>
               <div className="bench-name">{player.name}</div>
               <span className="bench-actions">
                 <button

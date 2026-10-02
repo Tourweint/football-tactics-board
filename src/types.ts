@@ -55,8 +55,8 @@ export interface XY {
 /** 球场显示方向：横屏（默认）/ 竖屏（旋转 90°，适合手机） */
 export type PitchOrientation = 'landscape' | 'portrait'
 
-/** 箭头类型：pass 传球（实线）/ run 跑位（虚线） */
-export type ArrowType = 'pass' | 'run'
+/** 箭头类型：pass 传球（实线）/ run 跑位（虚线）/ curve 弧线（实线曲线） */
+export type ArrowType = 'pass' | 'run' | 'curve'
 
 /** 战术箭头 */
 export interface ArrowDef {
@@ -85,23 +85,18 @@ export interface TextDef {
   text: string
 }
 
+/** 弧线（二次贝塞尔，ctrl 为控制点） */
+export interface CurveDef {
+  id: string
+  from: XY
+  ctrl: XY
+  to: XY
+}
+
 /** 自由绘制的元素集合 */
 export interface CustomElements {
   arrows: ArrowDef[]
-  zones: ZoneDef[]
-  texts: TextDef[]
-}
-
-export type TacticType = 'attack' | 'defense' | 'setpiece' | 'custom'
-
-/** 战术（预设模板 + 自定义） */
-export interface Tactic {
-  id: string
-  name: string
-  type: TacticType
-  description: string
-  isPreset: boolean
-  arrows: ArrowDef[]
+  curves: CurveDef[]
   zones: ZoneDef[]
   texts: TextDef[]
 }
@@ -136,8 +131,6 @@ export interface PlanState {
   oppField: OppSlot[]
   oppFormationId: string | null
   customFormations: Formation[]
-  customTactics: Tactic[]
-  activeTactics: Tactic[]
   customElements: CustomElements
   ball: XY | null
   demoLibrary: TacticDemo[]

@@ -14,6 +14,9 @@ function EditForm({ editing }: { editing: Editing }) {
   const close = useEditStore((s) => s.close)
   const editPlayer = useBoardStore((s) => s.editPlayer)
   const oppEditPlayer = useBoardStore((s) => s.oppEditPlayer)
+  const removeFromField = useBoardStore((s) => s.removeFromField)
+  const oppRemoveSlot = useBoardStore((s) => s.oppRemoveSlot)
+  const removePlayer = useBoardStore((s) => s.removePlayer)
 
   const isOwn = editing.team === 'own'
   const player = useBoardStore((s) => s.players.find((p) => p.id === editing.playerId))
@@ -63,6 +66,19 @@ function EditForm({ editing }: { editing: Editing }) {
     close()
   }
 
+  /** 移除：我方场上球员 → 回替补席；我方替补 → 删除球员；对方 → 从场上删除 */
+  const onRemove = () => {
+    if (isOwn && player) {
+      if (slot) removeFromField(player.id)
+      else removePlayer(player.id)
+    } else if (opp) {
+      oppRemoveSlot(opp.id)
+    }
+    close()
+  }
+
+  const removeLabel = isOwn ? (slot ? '移下场' : '删除球员') : '删除球员'
+
   return (
     <div className="modal-overlay" onClick={close}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -105,6 +121,13 @@ function EditForm({ editing }: { editing: Editing }) {
         </div>
         {duplicate && <div className="modal-warn">⚠ 队内已有球员使用 {num} 号</div>}
         <div className="modal-actions">
+          <button
+            className="modal-remove"
+            title={isOwn && slot ? '移回替补席，场上少一人（可撤销）' : '删除（可撤销）'}
+            onClick={onRemove}
+          >
+            {removeLabel}
+          </button>
           <button className="modal-cancel" onClick={close}>
             取消
           </button>

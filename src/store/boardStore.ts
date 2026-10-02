@@ -12,18 +12,13 @@ import type {
   PlanState,
   Player,
   Position,
-  Tactic,
+  CurveDef,
   TacticDemo,
   TextDef,
   XY,
   ZoneDef,
 } from '../types'
-import {
-  findFormation,
-  mirroredLayout,
-  PRESET_FORMATIONS,
-  suggestPosition,
-} from '../formations'
+import { findFormation, mirroredLayout, PRESET_FORMATIONS } from '../formations'
 import { cloneDemo, PRESET_DEMOS } from '../demos'
 
 /** 默认球队：11 名首发 + 7 名替补 */
@@ -80,8 +75,6 @@ type BoardSnapshot = {
   customFormations: Formation[]
   oppField: OppSlot[]
   oppFormationId: string | null
-  customTactics: Tactic[]
-  activeTactics: Tactic[]
   customElements: CustomElements
   demoLibrary: TacticDemo[]
   activeDemo: TacticDemo | null
@@ -89,18 +82,7 @@ type BoardSnapshot = {
 
 const HISTORY_LIMIT = 50
 
-const emptyCustomElements = (): CustomElements => ({ arrows: [], zones: [], texts: [] })
-
-/** 深拷贝战术（应用时生成独立实例，元素 id 全部刷新） */
-function cloneTactic(t: Tactic): Tactic {
-  return {
-    ...t,
-    id: `tactic-${crypto.randomUUID()}`,
-    arrows: t.arrows.map((a) => ({ ...a, id: crypto.randomUUID() })),
-    zones: t.zones.map((z) => ({ ...z, id: crypto.randomUUID() })),
-    texts: t.texts.map((x) => ({ ...x, id: crypto.randomUUID() })),
-  }
-}
+const emptyCustomElements = (): CustomElements => ({ arrows: [], curves: [], zones: [], texts: [] })
 
 interface BoardState {
   /** 展示模式 */
@@ -121,10 +103,6 @@ interface BoardState {
   oppField: OppSlot[]
   /** 对方当前应用的预设阵型（镜像摆位） */
   oppFormationId: string | null
-  /** 自定义战术库 */
-  customTactics: Tactic[]
-  /** 已应用的战术实例 */
-  activeTactics: Tactic[]
   /** 自由绘制的元素 */
   customElements: CustomElements
   /** 足球位置（演示模式使用，null = 无球） */
@@ -158,18 +136,24 @@ interface BoardState {
     id: string,
     patch: { name: string; number: number; preferredPositions: Position[]; fieldPosition?: Position },
   ) => void
-  /** 删除我方球员；场上球员删除时替补第一人自动顶上，替补席无人则删除失败返回 false */
+  /** 从名单删除球员（场上的直接移除、场上少一人，不自动换人；可撤销） */
   removePlayer: (id: string) => boolean
+  /** 我方场上球员移回替补席（场上少一人，可撤销） */
+  removeFromField: (playerId: string) => void
+  /** 删除对方场上球员（重摆对方阵型可补齐恢复） */
+  oppRemoveSlot: (id: string) => void
+  /** 移除足球（场上不显示） */
+  removeBall: () => void
+  /** 把足球放回中圈开球点 */
+  restoreBall: () => void
   /** 拖拽我方场上球员实时更新坐标 */
   updateSlot: (playerId: string, x: number, y: number) => void
   /** 落点自动建议位置标签 */
   setSlotPosition: (playerId: string, position: Position) => void
-  /** 我方场上两名球员互换位置（坐标与位置标签一起交换） */
+  /** 我方场上两名球员互换位置（仅交换站位坐标，角色/颜色随球员保持） */
   swapSlots: (a: string, b: string) => void
-  /** 我方场上球员 → 替补席：与替补席第一人互换（替补席无人则不动） */
-  sendToBench: (fieldPlayerId: string) => void
-  /** 我方替补球员 → 场上：与离落点最近的场上球员互换，位置按落点自动建议 */
-  bringOn: (benchPlayerId: string, x: number, y: number) => void
+  /** 我方替补球员 → 场上：不足 11 人时直接补位；满 11 人时仅当覆盖到指定场上球员才顶替他 */
+  bringOn: (benchPlayerId: string, x: number, y: number, targetPlayerId?: string) => void
   /** 我方按阵型摆位（保持现有场上球员顺序） */
   applyFormation: (formationId: string) => void
   /** 把当前场上站位保存为自定义阵型 */
@@ -188,22 +172,18 @@ interface BoardState {
   /** 对方按预设阵型摆位（镜像） */
   oppApplyFormation: (formationId: string) => void
 
-  /** 应用战术（预设或自定义），生成独立实例叠加到画布 */
-  applyTactic: (tacticId: string) => void
-  /** 移除已应用的战术实例 */
-  removeTactic: (instanceId: string) => void
   /** 添加自定义箭头 */
   addCustomArrow: (a: { type: ArrowDef['type']; from: ArrowDef['from']; to: ArrowDef['to'] }) => void
+  /** 添加自定义弧线 */
+  addCustomCurve: (c: { from: CurveDef['from']; ctrl: CurveDef['ctrl']; to: CurveDef['to'] }) => void
   /** 添加自定义高亮区域 */
   addCustomZone: (z: { x: number; y: number; w: number; h: number; color: string }) => void
   /** 添加自定义文字标注 */
   addCustomText: (t: { x: number; y: number; text: string }) => void
   /** 删除任意元素（作用于已应用战术实例与自由绘制） */
   removeElement: (id: string) => void
-  /** 把自由绘制的元素保存为自定义战术 */
-  saveCustomTactic: (name: string) => void
-  /** 清空全部已应用战术与自由绘制 */
-  clearCustomTactics: () => void
+  /** 清空全部手绘标注（箭头/区域/文字，可撤销） */
+  clearCustomElements: () => void
 
   /** 移动足球（演示编排） */
   setBall: (x: number, y: number) => void
@@ -264,8 +244,6 @@ export const useBoardStore = create<BoardState>()(
         customFormations: s.customFormations,
         oppField: s.oppField,
         oppFormationId: s.oppFormationId,
-        customTactics: s.customTactics,
-        activeTactics: s.activeTactics,
         customElements: s.customElements,
         demoLibrary: s.demoLibrary,
         activeDemo: s.activeDemo,
@@ -286,8 +264,6 @@ export const useBoardStore = create<BoardState>()(
       return {
         ...defaultState(),
         customFormations: [],
-        customTactics: [],
-        activeTactics: [],
         customElements: emptyCustomElements(),
         demoLibrary: [],
         activeDemo: null,
@@ -363,28 +339,29 @@ export const useBoardStore = create<BoardState>()(
         },
 
         removePlayer: (id) => {
-          const s = get()
-          const slotIdx = s.field.findIndex((slot) => slot.playerId === id)
-          if (slotIdx >= 0) {
-            // 场上球员：替补第一人自动顶上；替补席无人则不允许删除
-            if (s.bench.length === 0) return false
-            mutate((st) => {
-              const field = [...st.field]
-              field[slotIdx] = { ...field[slotIdx], playerId: st.bench[0] }
-              return {
-                players: st.players.filter((p) => p.id !== id),
-                field,
-                bench: st.bench.slice(1),
-              }
-            })
-          } else {
-            mutate((st) => ({
-              players: st.players.filter((p) => p.id !== id),
-              bench: st.bench.filter((bid) => bid !== id),
-            }))
-          }
+          // 从名单删除：场上的直接移除（场上少一人，不自动换人），替补的一并移出
+          mutate((s) => ({
+            players: s.players.filter((p) => p.id !== id),
+            field: s.field.filter((slot) => slot.playerId !== id),
+            bench: s.bench.filter((bid) => bid !== id),
+          }))
           return true
         },
+
+        removeFromField: (playerId) => {
+          mutate((s) => ({
+            field: s.field.filter((slot) => slot.playerId !== playerId),
+            bench: [...s.bench, playerId],
+          }))
+        },
+
+        oppRemoveSlot: (id) => {
+          mutate((s) => ({ oppField: s.oppField.filter((slot) => slot.id !== id) }))
+        },
+
+        removeBall: () => set({ ball: null }),
+
+        restoreBall: () => set({ ball: { x: 50, y: 50 } }),
 
         updateSlot: (playerId, x, y) => {
           set((s) => ({
@@ -410,44 +387,34 @@ export const useBoardStore = create<BoardState>()(
             const field = [...s.field]
             const sa = field[ia]
             const sb = field[ib]
-            field[ia] = { ...sa, x: sb.x, y: sb.y, position: sb.position }
-            field[ib] = { ...sb, x: sa.x, y: sa.y, position: sa.position }
+            // 仅交换站位坐标；角色（position）随球员保持不变，颜色不因换位改变
+            field[ia] = { ...sa, x: sb.x, y: sb.y }
+            field[ib] = { ...sb, x: sa.x, y: sa.y }
             return { field }
           })
         },
 
-        sendToBench: (fieldPlayerId) => {
-          const s = get()
-          if (s.bench.length === 0) return
-          set({
-            field: s.field.map((slot) =>
-              slot.playerId === fieldPlayerId ? { ...slot, playerId: s.bench[0] } : slot,
-            ),
-            bench: [...s.bench.slice(1), fieldPlayerId],
-          })
-        },
-
-        bringOn: (benchPlayerId, x, y) => {
+        bringOn: (benchPlayerId, x, y, targetPlayerId) => {
           const s = get()
           const cx = clamp(x)
           const cy = clamp(y)
-          let nearestIdx = 0
-          let nearestDist = Infinity
-          s.field.forEach((slot, i) => {
-            const d = Math.hypot(slot.x - cx, slot.y - cy)
-            if (d < nearestDist) {
-              nearestDist = d
-              nearestIdx = i
-            }
-          })
-          const replaced = s.field[nearestIdx]
-          // 位置自动建议：取当前阵型中离落点最近的角色
-          const formation = findFormation(s.formationId, s.customFormations)
-          const position = formation
-            ? suggestPosition(cx, cy, formation.layout)
-            : replaced.position
+          // 场上不足 11 人：直接补位上场，不顶替任何人（位置标签取球员角色）
+          if (s.field.length < 11) {
+            const rolePos =
+              s.players.find((p) => p.id === benchPlayerId)?.preferredPositions[0] ?? 'CM'
+            mutate((st) => ({
+              field: [...st.field, { playerId: benchPlayerId, x: cx, y: cy, position: rolePos }],
+              bench: st.bench.filter((id) => id !== benchPlayerId),
+            }))
+            return
+          }
+          // 场上满 11 人：必须覆盖到指定场上球员才顶替（沿用其站位与角色），否则不动
+          if (!targetPlayerId) return
+          const idx = s.field.findIndex((slot) => slot.playerId === targetPlayerId)
+          if (idx < 0) return
+          const replaced = s.field[idx]
           const field = [...s.field]
-          field[nearestIdx] = { playerId: benchPlayerId, x: cx, y: cy, position }
+          field[idx] = { ...replaced, playerId: benchPlayerId }
           set({
             field,
             bench: [...s.bench.filter((id) => id !== benchPlayerId), replaced.playerId],
@@ -457,15 +424,24 @@ export const useBoardStore = create<BoardState>()(
         applyFormation: (formationId) => {
           const formation = findFormation(formationId, get().customFormations)
           if (!formation) return
-          mutate((s) => ({
-            formationId,
-            field: s.field.map((slot, i) => {
-              const layout = formation.layout[i]
-              return layout
-                ? { ...slot, x: layout.x, y: layout.y, position: layout.position }
-                : slot
-            }),
-          }))
+          mutate((s) => {
+            // 场上不足 11 人时从替补席补齐（应用阵型 = 摆满首发）
+            const field = [...s.field]
+            const bench = [...s.bench]
+            while (field.length < 11 && bench.length > 0) {
+              field.push({ playerId: bench.shift()!, x: 50, y: 50, position: 'CM' })
+            }
+            return {
+              formationId,
+              field: field.map((slot, i) => {
+                const layout = formation.layout[i]
+                return layout
+                  ? { ...slot, x: layout.x, y: layout.y, position: layout.position }
+                  : slot
+              }),
+              bench,
+            }
+          })
         },
 
         saveCustomFormation: (name) => {
@@ -524,8 +500,8 @@ export const useBoardStore = create<BoardState>()(
             const oppField = [...s.oppField]
             const sa = oppField[ia]
             const sb = oppField[ib]
-            oppField[ia] = { ...sa, x: sb.x, y: sb.y, position: sb.position }
-            oppField[ib] = { ...sb, x: sa.x, y: sa.y, position: sa.position }
+            oppField[ia] = { ...sa, x: sb.x, y: sb.y }
+            oppField[ib] = { ...sb, x: sa.x, y: sa.y }
             return { oppField }
           })
         },
@@ -534,27 +510,30 @@ export const useBoardStore = create<BoardState>()(
           const formation = PRESET_FORMATIONS.find((f) => f.id === formationId)
           if (!formation) return
           const layout = mirroredLayout(formation)
-          mutate((s) => ({
-            oppFormationId: formationId,
-            oppField: s.oppField.map((slot, i) => {
-              const point = layout[i]
-              return point
-                ? { ...slot, x: point.x, y: point.y, position: point.position }
-                : slot
-            }),
-          }))
-        },
-
-        applyTactic: (tacticId) => {
-          const tactic = get().customTactics.find((t) => t.id === tacticId)
-          if (!tactic) return
-          mutate((s) => ({ activeTactics: [...s.activeTactics, cloneTactic(tactic)] }))
-        },
-
-        removeTactic: (instanceId) => {
-          mutate((s) => ({
-            activeTactics: s.activeTactics.filter((t) => t.id !== instanceId),
-          }))
+          mutate((s) => {
+            // 不足 11 人时补齐（恢复此前被删除的对方球员）
+            const oppField = [...s.oppField]
+            while (oppField.length < 11) {
+              const i = oppField.length
+              const point = layout[i] ?? layout[layout.length - 1]
+              oppField.push({
+                id: `opp-${crypto.randomUUID()}`,
+                number: i + 1,
+                x: point.x,
+                y: point.y,
+                position: point.position,
+              })
+            }
+            return {
+              oppFormationId: formationId,
+              oppField: oppField.map((slot, i) => {
+                const point = layout[i]
+                return point
+                  ? { ...slot, x: point.x, y: point.y, position: point.position }
+                  : slot
+              }),
+            }
+          })
         },
 
         addCustomArrow: (a) => {
@@ -563,6 +542,16 @@ export const useBoardStore = create<BoardState>()(
             customElements: {
               ...s.customElements,
               arrows: [...s.customElements.arrows, el],
+            },
+          }))
+        },
+
+        addCustomCurve: (c) => {
+          const el: CurveDef = { id: crypto.randomUUID(), ...c }
+          mutate((s) => ({
+            customElements: {
+              ...s.customElements,
+              curves: [...s.customElements.curves, el],
             },
           }))
         },
@@ -589,46 +578,17 @@ export const useBoardStore = create<BoardState>()(
 
         removeElement: (id) => {
           mutate((s) => ({
-            activeTactics: s.activeTactics
-              .map((t) => ({
-                ...t,
-                arrows: t.arrows.filter((a) => a.id !== id),
-                zones: t.zones.filter((z) => z.id !== id),
-                texts: t.texts.filter((x) => x.id !== id),
-              }))
-              .filter(
-                (t) => t.arrows.length + t.zones.length + t.texts.length > 0,
-              ),
             customElements: {
               arrows: s.customElements.arrows.filter((a) => a.id !== id),
+              curves: s.customElements.curves.filter((c) => c.id !== id),
               zones: s.customElements.zones.filter((z) => z.id !== id),
               texts: s.customElements.texts.filter((x) => x.id !== id),
             },
           }))
         },
 
-        saveCustomTactic: (name) => {
-          mutate((s) => {
-            const el = s.customElements
-            const tactic: Tactic = {
-              id: `custom-tactic-${crypto.randomUUID()}`,
-              name,
-              type: 'custom',
-              description: '自定义战术',
-              isPreset: false,
-              arrows: el.arrows,
-              zones: el.zones,
-              texts: el.texts,
-            }
-            return {
-              customTactics: [...s.customTactics, tactic],
-              customElements: emptyCustomElements(),
-            }
-          })
-        },
-
-        clearCustomTactics: () => {
-          mutate(() => ({ activeTactics: [], customElements: emptyCustomElements() }))
+        clearCustomElements: () => {
+          mutate(() => ({ customElements: emptyCustomElements() }))
         },
 
         setBall: (x, y) => set({ ball: { x: clamp(x), y: clamp(y) } }),
@@ -728,8 +688,6 @@ export const useBoardStore = create<BoardState>()(
             oppField: s.oppField,
             oppFormationId: s.oppFormationId,
             customFormations: s.customFormations,
-            customTactics: s.customTactics,
-            activeTactics: s.activeTactics,
             customElements: s.customElements,
             ball: s.ball,
             demoLibrary: s.demoLibrary,
@@ -757,6 +715,10 @@ export const useBoardStore = create<BoardState>()(
         loadPlan: (id) => {
           const plan = get().plans.find((p) => p.id === id)
           if (!plan) return
+          // 旧方案快照可能携带已移除的战术库字段，载入前剔除
+          const legacyState = plan.state as unknown as Record<string, unknown>
+          delete legacyState.customTactics
+          delete legacyState.activeTactics
           set({ ...plan.state, currentPlanId: id })
         },
 
@@ -771,8 +733,6 @@ export const useBoardStore = create<BoardState>()(
           set({
             ...defaultState(),
             customFormations: [],
-            customTactics: [],
-            activeTactics: [],
             customElements: emptyCustomElements(),
             demoLibrary: [],
             activeDemo: null,
@@ -786,13 +746,19 @@ export const useBoardStore = create<BoardState>()(
             ...defaultState(),
             ...state,
             customFormations: state.customFormations ?? [],
-            customTactics: state.customTactics ?? [],
-            activeTactics: state.activeTactics ?? [],
-            customElements: state.customElements ?? { arrows: [], zones: [], texts: [] },
-            ball: state.ball ?? { x: 50, y: 50 },
+            customElements: {
+              arrows: state.customElements?.arrows ?? [],
+              curves: state.customElements?.curves ?? [],
+              zones: state.customElements?.zones ?? [],
+              texts: state.customElements?.texts ?? [],
+            },
+            ball: state.ball === undefined ? { x: 50, y: 50 } : state.ball,
             demoLibrary: state.demoLibrary ?? [],
             activeDemo: state.activeDemo ?? null,
           }
+          // 旧版本导出可能携带已移除的战术库字段，忽略之
+          delete (merged as unknown as Record<string, unknown>).customTactics
+          delete (merged as unknown as Record<string, unknown>).activeTactics
           const plan: Plan = {
             id: `plan-${crypto.randomUUID()}`,
             name,
@@ -809,7 +775,28 @@ export const useBoardStore = create<BoardState>()(
     },
     {
       name: 'ftb-board',
-      version: 1,
+      version: 2,
+      // v1 -> v2：补齐 customElements.curves 字段（旧数据缺省导致黑屏）
+      migrate: (persisted) => {
+        const s = persisted as Record<string, unknown>
+        if (s.customElements && typeof s.customElements === 'object') {
+          const ce = s.customElements as Record<string, unknown>
+          if (!Array.isArray(ce.curves)) ce.curves = []
+        }
+        // 旧方案快照里的 customElements 同样补齐
+        if (Array.isArray(s.plans)) {
+          for (const plan of s.plans as Array<Record<string, unknown>>) {
+            const st = plan?.state
+            if (st && typeof st === 'object') {
+              const ce = (st as Record<string, unknown>).customElements
+              if (ce && typeof ce === 'object' && !Array.isArray((ce as Record<string, unknown>).curves)) {
+                ;(ce as Record<string, unknown>).curves = []
+              }
+            }
+          }
+        }
+        return persisted
+      },
       // 历史栈不持久化
       partialize: (s) => ({
         mode: s.mode,
@@ -821,8 +808,6 @@ export const useBoardStore = create<BoardState>()(
         customFormations: s.customFormations,
         oppField: s.oppField,
         oppFormationId: s.oppFormationId,
-        customTactics: s.customTactics,
-        activeTactics: s.activeTactics,
         customElements: s.customElements,
         ball: s.ball,
         demoLibrary: s.demoLibrary,

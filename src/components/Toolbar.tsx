@@ -1,22 +1,103 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { toPng } from 'html-to-image'
 import { useBoardStore } from '../store/boardStore'
 import { useDemoStore } from '../store/demoStore'
 import { useToolStore, type DrawTool } from '../store/toolStore'
 import { useUIStore } from '../store/uiStore'
 import { findFormation, PRESET_FORMATIONS } from '../formations'
-import { PRESET_TACTICS, TACTIC_TYPE_LABELS } from '../tactics'
 import NameModal from './NameModal'
 
-/** 绘制工具按钮定义 */
-const DRAW_TOOLS: Array<{ id: DrawTool; label: string; title: string }> = [
-  { id: 'select', label: '移动', title: '移动球员（默认）' },
-  { id: 'pass', label: '传球', title: '绘制传球箭头（实线）' },
-  { id: 'run', label: '跑位', title: '绘制跑位箭头（虚线）' },
-  { id: 'zone', label: '区域', title: '框选高亮区域' },
-  { id: 'text', label: '文字', title: '点击球场添加文字标注' },
-  { id: 'eraser', label: '橡皮', title: '点击删除箭头/区域/文字' },
+/** 16×16 线性小图标（currentColor 描边，随按钮状态变色） */
+const icon = (paths: ReactNode) => (
+  <svg
+    viewBox="0 0 16 16"
+    width={14}
+    height={14}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    {paths}
+  </svg>
+)
+
+/** 绘制工具按钮定义（图标 + 文字） */
+const DRAW_TOOLS: Array<{ id: DrawTool; label: string; title: string; icon: ReactNode }> = [
+  {
+    id: 'select',
+    label: '移动',
+    title: '移动球员（默认）',
+    icon: icon(
+      <>
+        <path d="M8 2.5v11M2.5 8h11" />
+        <path d="M8 2.5 6.5 4M8 2.5 9.5 4M8 13.5 6.5 12M8 13.5 9.5 12M2.5 8 4 6.5M2.5 8 4 9.5M13.5 8 12 6.5M13.5 8 12 9.5" />
+      </>,
+    ),
+  },
+  {
+    id: 'pass',
+    label: '传球',
+    title: '绘制传球箭头（实线）',
+    icon: icon(<path d="M2.5 13.5 12.5 3.5M7 3.5h5.5V9" />),
+  },
+  {
+    id: 'run',
+    label: '跑位',
+    title: '绘制跑位箭头（虚线）',
+    icon: icon(
+      <>
+        <path d="M2.5 13.5 12.5 3.5" strokeDasharray="2.2 1.8" />
+        <path d="M7 3.5h5.5V9" />
+      </>,
+    ),
+  },
+  {
+    id: 'curve',
+    label: '弧线',
+    title: '绘制弧线：点击起点 → 点击弯点 → 点击终点（Esc 取消）',
+    icon: icon(
+      <>
+        <path d="M2.5 13.5C5.5 4.5 10.5 4.5 13.5 11.5" />
+        <path d="M12 8.5l1.5 3-3-.5" />
+      </>,
+    ),
+  },
+  {
+    id: 'zone',
+    label: '区域',
+    title: '框选高亮区域',
+    icon: icon(<rect x="2.5" y="3.5" width="11" height="9" rx="1" strokeDasharray="3 2" />),
+  },
+  {
+    id: 'text',
+    label: '文字',
+    title: '点击球场添加文字标注',
+    icon: icon(<path d="M3.5 4h9M8 4v8.5" />),
+  },
+  {
+    id: 'eraser',
+    label: '橡皮',
+    title: '点击删除箭头/区域/文字；点球员移回替补席、点足球移除',
+    icon: icon(
+      <>
+        <path d="M2.5 10.5 9 4l3 3-6.5 6.5H4.2z" />
+        <path d="M4.3 8.7 7.3 11.7" />
+        <path d="M2.5 15h11" />
+      </>,
+    ),
+  },
 ]
+
+/** 演示按钮图标 */
+const demoIcon = icon(
+  <>
+    <rect x="1.5" y="3" width="13" height="10" rx="2" />
+    <path d="M6.5 5.8v4.4L10.5 8z" fill="currentColor" stroke="none" />
+  </>,
+)
 
 /** 顶部工具栏：模式切换 + 阵型 + 方案 + 导出 / 战术库 + 绘制 + 演示 + 撤销 */
 export default function Toolbar() {
@@ -38,15 +119,13 @@ export default function Toolbar() {
   const newPlan = useBoardStore((s) => s.newPlan)
   const importPlan = useBoardStore((s) => s.importPlan)
 
-  const customTactics = useBoardStore((s) => s.customTactics)
-  const activeTactics = useBoardStore((s) => s.activeTactics)
   const customElements = useBoardStore((s) => s.customElements)
-  const applyTactic = useBoardStore((s) => s.applyTactic)
-  const removeTactic = useBoardStore((s) => s.removeTactic)
-  const saveCustomTactic = useBoardStore((s) => s.saveCustomTactic)
-  const clearCustomTactics = useBoardStore((s) => s.clearCustomTactics)
+  const clearCustomElements = useBoardStore((s) => s.clearCustomElements)
   const undo = useBoardStore((s) => s.undo)
   const redo = useBoardStore((s) => s.redo)
+  const ball = useBoardStore((s) => s.ball)
+  const removeBall = useBoardStore((s) => s.removeBall)
+  const restoreBall = useBoardStore((s) => s.restoreBall)
 
   const tool = useToolStore((s) => s.tool)
   const setTool = useToolStore((s) => s.setTool)
@@ -64,7 +143,6 @@ export default function Toolbar() {
     initial: string
     onSubmit: (name: string) => void
   } | null>(null)
-  const [tacticId, setTacticId] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const selectedFormation = findFormation(formationId, customFormations)
@@ -109,8 +187,6 @@ export default function Toolbar() {
       oppField: s.oppField,
       oppFormationId: s.oppFormationId,
       customFormations: s.customFormations,
-      customTactics: s.customTactics,
-      activeTactics: s.activeTactics,
       customElements: s.customElements,
       ball: s.ball,
       demoLibrary: s.demoLibrary,
@@ -138,7 +214,7 @@ export default function Toolbar() {
             !state ||
             !Array.isArray(state.players) ||
             !Array.isArray(state.field) ||
-            state.field.length !== 11 ||
+            state.field.length > 11 ||
             !Array.isArray(state.bench) ||
             !Array.isArray(state.oppField)
           ) {
@@ -153,21 +229,6 @@ export default function Toolbar() {
       .catch(() => window.alert('文件读取失败'))
   }
 
-  const tacticGroups: Array<{ label: string; tactics: Array<{ id: string; name: string }> }> = [
-    {
-      label: TACTIC_TYPE_LABELS.attack,
-      tactics: PRESET_TACTICS.filter((t) => t.type === 'attack'),
-    },
-    {
-      label: TACTIC_TYPE_LABELS.defense,
-      tactics: PRESET_TACTICS.filter((t) => t.type === 'defense'),
-    },
-    {
-      label: TACTIC_TYPE_LABELS.setpiece,
-      tactics: PRESET_TACTICS.filter((t) => t.type === 'setpiece'),
-    },
-    { label: TACTIC_TYPE_LABELS.custom, tactics: customTactics },
-  ].filter((g) => g.tactics.length > 0)
 
   return (
     <header className="toolbar">
@@ -262,6 +323,13 @@ export default function Toolbar() {
                   </option>
                 ))}
               </select>
+              <button
+                className="tool-btn"
+                title="按当前对方阵型重摆，并补齐被删除的对方球员"
+                onClick={() => oppFormationId && oppApplyFormation(oppFormationId)}
+              >
+                重摆
+              </button>
             </div>
           )}
 
@@ -359,43 +427,6 @@ export default function Toolbar() {
       {toolsOpen && (
       <div className="toolbar-row second">
         <div className="tool-group">
-          <span className="tool-label">战术</span>
-          <select value={tacticId} onChange={(e) => setTacticId(e.target.value)}>
-            <option value="">选择战术</option>
-            {tacticGroups.map((g) => (
-              <optgroup key={g.label} label={g.label}>
-                {g.tactics.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <button
-            className="tool-btn"
-            disabled={!tacticId}
-            onClick={() => {
-              applyTactic(tacticId)
-              setTacticId('')
-            }}
-          >
-            添加
-          </button>
-        </div>
-
-        <div className="chips">
-          {activeTactics.map((t) => (
-            <span className="tactic-chip" key={t.id} title={t.description}>
-              {t.name}
-              <button title="移除该战术" onClick={() => removeTactic(t.id)}>
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-
-        <div className="tool-group">
           <span className="tool-label">绘制</span>
           {DRAW_TOOLS.map((t) => (
             <button
@@ -404,6 +435,7 @@ export default function Toolbar() {
               title={t.title}
               onClick={() => setTool(t.id)}
             >
+              {t.icon}
               {t.label}
             </button>
           ))}
@@ -414,30 +446,25 @@ export default function Toolbar() {
           title="关键帧编排与动画演示（摆一步、录一步，可导出 GIF/视频）"
           onClick={() => (demoOpen ? closeDemo() : openDemo())}
         >
-          🎬 演示
+          {demoIcon}
+          演示
+        </button>
+
+        <button
+          className="tool-btn"
+          title={ball ? '移除场上的足球' : '把足球放回中圈开球点'}
+          onClick={() => (ball ? removeBall() : restoreBall())}
+        >
+          {ball ? '移除足球' : '添加足球'}
         </button>
 
         <div className="tool-group">
           <button
-            className="tool-btn"
-            disabled={customElementCount === 0}
-            title="把绘制的箭头/区域/文字保存为自定义战术"
-            onClick={() =>
-              setNameModal({
-                title: '保存为自定义战术',
-                initial: '自定义战术',
-                onSubmit: saveCustomTactic,
-              })
-            }
-          >
-            存为战术
-          </button>
-          <button
             className="tool-btn danger"
-            disabled={activeTactics.length === 0 && customElementCount === 0}
-            title="清空已应用战术与自由绘制"
+            disabled={customElementCount === 0}
+            title="清空手绘的箭头/区域/文字（可撤销）"
             onClick={() => {
-              if (window.confirm('清空全部战术标注？')) clearCustomTactics()
+              if (window.confirm('清空全部手绘标注？')) clearCustomElements()
             }}
           >
             清空

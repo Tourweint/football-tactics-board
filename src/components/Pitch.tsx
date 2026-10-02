@@ -1,19 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useBoardStore } from '../store/boardStore'
 import { useDragStore } from '../store/dragStore'
 import { useEditStore } from '../store/editStore'
 import { useDemoStore } from '../store/demoStore'
 import { useToolStore, type Draft } from '../store/toolStore'
 import { nearestFieldSlot, pointInPitch, pointInZone, toDisplay } from '../drag'
-import { hitArrow, hitText, hitZone } from '../draw'
+import { hitArrow, hitCurve, hitText, hitZone, quadraticPoint } from '../draw'
 import { demoFrameState } from '../demos'
-import { findFormation, mirroredLayout, suggestPosition } from '../formations'
+import type { XY } from '../types'
 import { POSITION_COLOR } from '../positions'
 import type {
   ArrowDef,
+  CurveDef,
   FieldSlot,
   TextDef,
-  XY,
   ZoneDef,
 } from '../types'
 import PlayerToken from './PlayerToken'
@@ -151,17 +151,55 @@ function Arrow({ a }: { a: ArrowDef }) {
   )
 }
 
+/** 弧线（二次贝塞尔，末端箭头指向 ctrl→to 方向；线在箭头底座截断，尖端为最前端） */
+function Curve({ c }: { c: CurveDef }) {
+  const color = '#f8fafc'
+  const dx = c.to.x - c.ctrl.x
+  const dy = c.to.y - c.ctrl.y
+  const len = Math.hypot(dx, dy) || 1
+  const ux = dx / len
+  const uy = dy / len
+  const headLen = 2.6
+  const headW = 1.3
+  const px = -uy
+  const py = ux
+  // 线在箭头底座处截断（与直线箭头同款几何），避免圆头线帽盖住三角尖
+  const tEnd = 1 - headLen / len
+  const endBase = quadraticPoint(c.from, c.ctrl, c.to, tEnd)
+  const bx = c.to.x - ux * headLen
+  const by = c.to.y - uy * headLen
+  return (
+    <g>
+      <path
+        d={`M ${c.from.x} ${c.from.y} Q ${c.ctrl.x} ${c.ctrl.y} ${endBase.x} ${endBase.y}`}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.1}
+        strokeLinecap="round"
+      />
+      <polygon
+        points={`${c.to.x},${c.to.y} ${bx + px * headW},${by + py * headW} ${bx - px * headW},${by - py * headW}`}
+        fill={color}
+      />
+    </g>
+  )
+}
+
 /** 战术叠加层：高亮区域 + 箭头（SVG），文字标注（HTML）；坐标均为显示坐标 */
 function TacticOverlay({
   arrows,
+  curves,
   zones,
   texts,
   draft,
+  curvePreview,
 }: {
   arrows: ArrowDef[]
+  curves: CurveDef[]
   zones: ZoneDef[]
   texts: TextDef[]
   draft: Draft
+  curvePreview: CurveDef | null
 }) {
   return (
     <>
@@ -205,9 +243,36 @@ function TacticOverlay({
         {arrows.map((a) => (
           <Arrow key={a.id} a={a} />
         ))}
+        {curves.map((c) => (
+          <Curve key={c.id} c={c} />
+        ))}
+        {curvePreview && (
+          <g opacity={0.6}>
+            <Curve c={curvePreview} />
+          </g>
+        )}
         {draft && draft.kind === 'arrow' && (
           <Arrow a={{ id: 'draft', type: draft.type, from: draft.start, to: draft.cur }} />
         )}
+        {draft && draft.kind === 'curve' &&
+          (() => {
+            const mx = (draft.start.x + draft.cur.x) / 2
+            const my = (draft.start.y + draft.cur.y) / 2
+            const dx = draft.cur.x - draft.start.x
+            const dy = draft.cur.y - draft.start.y
+            const len = Math.hypot(dx, dy) || 1
+            const offset = Math.min(len * 0.35, 18)
+            return (
+              <Curve
+                c={{
+                  id: 'draft',
+                  from: draft.start,
+                  ctrl: { x: mx - (dy / len) * offset, y: my + (dx / len) * offset },
+                  to: draft.cur,
+                }}
+              />
+            )
+          })()}
         {draft && draft.kind === 'zone' && (
           <rect
             x={Math.min(draft.start.x, draft.cur.x)}
@@ -237,7 +302,6 @@ export default function Pitch() {
   const players = useBoardStore((s) => s.players)
   const mode = useBoardStore((s) => s.mode)
   const oppField = useBoardStore((s) => s.oppField)
-  const activeTactics = useBoardStore((s) => s.activeTactics)
   const customElements = useBoardStore((s) => s.customElements)
   const ball = useBoardStore((s) => s.ball)
   const activeDemo = useBoardStore((s) => s.activeDemo)
@@ -252,6 +316,26 @@ export default function Pitch() {
   const demoProgress = useDemoStore((s) => s.progress)
   const previewIndex = useDemoStore((s) => s.previewIndex)
   const [textPoint, setTextPoint] = useState<XY | null>(null)
+  /** 三点弧线草稿：ctrl 为 null 表示弯点待定 */
+  const [curveDraft, setCurveDraft] = useState<{ from: XY; ctrl: XY | null } | null>(null)
+  /** 弧线悬停点（预览用） */
+  const [curveHover, setCurveHover] = useState<XY | null>(null)
+
+  // 切换工具时取消未完成的弧线
+  useEffect(() => {
+    setCurveDraft(null)
+    setCurveHover(null)
+  }, [tool])
+
+  // Esc 取消弧线绘制
+  useEffect(() => {
+    if (!curveDraft) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCurveDraft(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [curveDraft])
 
   /** 数据坐标 → 显示坐标 */
   const disp = (p: XY): XY => toDisplay(p, orientation)
@@ -268,6 +352,12 @@ export default function Pitch() {
     }
   }
   const mapText = (t: TextDef): TextDef => ({ ...t, ...disp(t) })
+  const mapCurve = (c: CurveDef): CurveDef => ({
+    ...c,
+    from: disp(c.from),
+    ctrl: disp(c.ctrl),
+    to: disp(c.to),
+  })
 
   /** 演示视图：播放中或预览帧时覆盖实时状态（数据坐标） */
   let demoView: {
@@ -284,23 +374,28 @@ export default function Pitch() {
     }
   }
 
-  const overlayArrows = (demoView
-    ? demoView.arrows
-    : [...activeTactics.flatMap((t) => t.arrows), ...customElements.arrows]
-  ).map(mapArrow)
-  const overlayZones = [
-    ...activeTactics.flatMap((t) => t.zones),
-    ...customElements.zones,
-  ].map(mapZone)
-  const overlayTexts = [
-    ...activeTactics.flatMap((t) => t.texts),
-    ...customElements.texts,
-  ].map(mapText)
+  const overlayArrows = (demoView ? demoView.arrows : customElements.arrows).map(mapArrow)
+  const overlayCurves = customElements.curves.map(mapCurve)
+  const overlayZones = customElements.zones.map(mapZone)
+  const overlayTexts = customElements.texts.map(mapText)
   const draftMapped = draft
     ? { ...draft, start: disp(draft.start), cur: disp(draft.cur) }
     : null
+  // 弧线预览：仅起点 → 弯点跟随指针；弯点已定 → 终点跟随指针
+  let curvePreview: CurveDef | null = null
+  if (tool === 'curve' && curveDraft) {
+    const fromD = disp(curveDraft.from)
+    if (curveDraft.ctrl === null) {
+      const h = curveHover ? disp(curveHover) : fromD
+      curvePreview = { id: 'curve-preview', from: fromD, ctrl: h, to: h }
+    } else {
+      const ctrlD = disp(curveDraft.ctrl)
+      const h = curveHover ? disp(curveHover) : ctrlD
+      curvePreview = { id: 'curve-preview', from: fromD, ctrl: ctrlD, to: h }
+    }
+  }
   // 足球常驻球场：演示视图用帧内球位，否则用实时位置（老数据没有则为中圈开球点）
-  const shownBallData = demoView ? demoView.ball : (ball ?? { x: 50, y: 50 })
+  const shownBallData = demoView ? demoView.ball : ball
   const shownBall = shownBallData ? disp(shownBallData) : null
   const slotPos = (slot: FieldSlot): XY => {
     const data = demoView?.positions.get(slot.playerId) ?? slot
@@ -314,9 +409,17 @@ export default function Pitch() {
     const rect = pitch.getBoundingClientRect()
     const s = useBoardStore.getState()
     const entries: Array<{ id: string; hit: boolean }> = []
-    const collect = (arrows: ArrowDef[], zones: ZoneDef[], texts: TextDef[]) => {
+    const collect = (
+      arrows: ArrowDef[],
+      curves: CurveDef[],
+      zones: ZoneDef[],
+      texts: TextDef[],
+    ) => {
       for (const a of arrows) {
         entries.push({ id: a.id, hit: hitArrow(clientX, clientY, a, rect, orientation) })
+      }
+      for (const c of curves) {
+        entries.push({ id: c.id, hit: hitCurve(clientX, clientY, c, rect, orientation) })
       }
       for (const z of zones) {
         entries.push({ id: z.id, hit: hitZone(clientX, clientY, z, rect, orientation) })
@@ -325,10 +428,38 @@ export default function Pitch() {
         entries.push({ id: t.id, hit: hitText(clientX, clientY, t, rect, orientation) })
       }
     }
-    for (const t of s.activeTactics) collect(t.arrows, t.zones, t.texts)
-    collect(s.customElements.arrows, s.customElements.zones, s.customElements.texts)
+    collect(
+      s.customElements.arrows,
+      s.customElements.curves,
+      s.customElements.zones,
+      s.customElements.texts,
+    )
     const hit = entries.find((e) => e.hit)
-    if (hit) s.removeElement(hit.id)
+    if (hit) {
+      s.removeElement(hit.id)
+      return
+    }
+    // 未命中划线元素 → 尝试删除场上人物/物件（按显示坐标距离判定）
+    const u = ((clientX - rect.left) / rect.width) * 100
+    const v = ((clientY - rect.top) / rect.height) * 100
+    const distTo = (p: XY): number => {
+      const d = toDisplay(p, orientation)
+      return Math.hypot((d.x - u) * (rect.width / 100), (d.y - v) * (rect.height / 100))
+    }
+    // 我方球员 → 移回替补席（可撤销）
+    const ownHit = s.field.find((slot) => distTo(slot) < 22)
+    if (ownHit) {
+      s.removeFromField(ownHit.playerId)
+      return
+    }
+    // 对方球员 → 直接删除（重摆对方阵型可恢复）
+    const oppHit = s.mode === 'both' ? s.oppField.find((slot) => distTo(slot) < 22) : undefined
+    if (oppHit) {
+      s.oppRemoveSlot(oppHit.id)
+      return
+    }
+    // 足球 → 移除（工具栏可放回）
+    if (s.ball && distTo(s.ball) < 14) s.removeBall()
   }
 
   /** 画布背景绘制：箭头 / 区域 / 文字 / 橡皮 */
@@ -340,11 +471,38 @@ export default function Pitch() {
     if (!p) return
 
     if (tool === 'eraser') {
+      // 橡皮：单击擦除，按住拖动可连续擦除（经过即擦）
       eraseAt(e.clientX, e.clientY)
+      let last = { x: e.clientX, y: e.clientY }
+      const move = (ev: PointerEvent) => {
+        if (Math.hypot(ev.clientX - last.x, ev.clientY - last.y) < 6) return
+        last = { x: ev.clientX, y: ev.clientY }
+        eraseAt(ev.clientX, ev.clientY)
+      }
+      const stop = () => {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', stop)
+        window.removeEventListener('pointercancel', stop)
+      }
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', stop, { once: true })
+      window.addEventListener('pointercancel', stop, { once: true })
       return
     }
     if (tool === 'text') {
       setTextPoint(p)
+      return
+    }
+    if (tool === 'curve') {
+      // 三点弧线：点一下起点 → 点一下弯点（转点）→ 点一下终点
+      if (!curveDraft) {
+        setCurveDraft({ from: p, ctrl: null })
+      } else if (curveDraft.ctrl === null) {
+        setCurveDraft({ ...curveDraft, ctrl: p })
+      } else {
+        useBoardStore.getState().addCustomCurve({ from: curveDraft.from, ctrl: curveDraft.ctrl, to: p })
+        setCurveDraft(null)
+      }
       return
     }
 
@@ -385,9 +543,17 @@ export default function Pitch() {
     window.addEventListener('pointerup', up, { once: true })
   }
 
+  /** 弧线悬停预览：指针位置作为预览终点/弯点 */
+  const onPitchPointerMove = (e: React.PointerEvent) => {
+    if (tool !== 'curve' || !curveDraft) return
+    setCurveHover(pointInPitch(e.clientX, e.clientY, orientation))
+  }
+
   /** 足球拖拽（演示播放中不可拖） */
   const onBallPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
+    // 橡皮模式：点击足球 = 移除足球（交给画布 eraseAt 处理）
+    if (useToolStore.getState().tool === 'eraser') return
     if (useDemoStore.getState().mode === 'play') return
     e.preventDefault()
     useDemoStore.getState().clearPreview()
@@ -423,10 +589,10 @@ export default function Pitch() {
         return
       }
       if (pointInZone('[data-bench]', ev.clientX, ev.clientY)) {
-        // 拖到替补席 → 换下，替补席第一人自动顶上
-        useBoardStore.getState().sendToBench(playerId)
+        // 拖到替补席 → 直接移下场（回替补席，场上少一人；不自动换人）
+        useBoardStore.getState().removeFromField(playerId)
       } else {
-        // 落在另一名我方场上球员身上 → 两人换位
+        // 落在另一名我方场上球员身上 → 两人换位（角色/颜色随球员保持不变，仅交换站位）
         const other = nearestFieldSlot(
           ev.clientX,
           ev.clientY,
@@ -436,14 +602,6 @@ export default function Pitch() {
         )
         if (other) {
           useBoardStore.getState().swapSlots(playerId, other)
-        } else {
-          // 落点自动建议位置标签（按当前阵型最近角色）
-          const board = useBoardStore.getState()
-          const formation = findFormation(board.formationId, board.customFormations)
-          const p = pointInPitch(ev.clientX, ev.clientY, orientation)
-          if (formation && p) {
-            board.setSlotPosition(playerId, suggestPosition(p.x, p.y, formation.layout))
-          }
         }
       }
       useDragStore.getState().clear()
@@ -473,7 +631,7 @@ export default function Pitch() {
         useEditStore.getState().open('opp', oppId)
         return
       }
-      // 落在另一名对方场上球员身上 → 两人换位
+      // 落在另一名对方场上球员身上 → 两人换位（角色/颜色随球员保持不变，仅交换站位）
       const other = nearestFieldSlot(
         ev.clientX,
         ev.clientY,
@@ -483,14 +641,6 @@ export default function Pitch() {
       )
       if (other) {
         useBoardStore.getState().oppSwapSlots(oppId, other)
-      } else {
-        // 落点自动建议位置标签（按对方阵型的镜像点位）
-        const board = useBoardStore.getState()
-        const formation = findFormation(board.oppFormationId, [])
-        const p = pointInPitch(ev.clientX, ev.clientY, orientation)
-        if (formation && p) {
-          board.oppSetSlotPosition(oppId, suggestPosition(p.x, p.y, mirroredLayout(formation)))
-        }
       }
       useDragStore.getState().clear()
     }
@@ -501,17 +651,26 @@ export default function Pitch() {
   return (
     <div className="pitch-wrap">
       <div
-        className={`pitch${orientation === 'portrait' ? ' portrait' : ''}${tool !== 'select' ? ' drawing' : ''}${demoMode === 'play' ? ' demo-playing' : ''}`}
+        className={`pitch${orientation === 'portrait' ? ' portrait' : ''}${tool !== 'select' ? ' drawing' : ''}${tool === 'eraser' ? ' erasing' : ''}${demoMode === 'play' ? ' demo-playing' : ''}`}
         data-pitch
         onPointerDown={onPitchPointerDown}
+        onPointerMove={onPitchPointerMove}
       >
         {orientation === 'portrait' ? <PortraitMarkings /> : <LandscapeMarkings />}
-        <TacticOverlay arrows={overlayArrows} zones={overlayZones} texts={overlayTexts} draft={draftMapped} />
+        <TacticOverlay
+          arrows={overlayArrows}
+          curves={overlayCurves}
+          zones={overlayZones}
+          texts={overlayTexts}
+          draft={draftMapped}
+          curvePreview={curvePreview}
+        />
         {/* 对方球员在下层 */}
         {mode === 'both' &&
           oppField.map((slot) => (
             <PlayerToken
               key={slot.id}
+              playerId={slot.id}
               number={slot.number}
               position={slot.position}
               color={OPP_COLOR}
@@ -527,12 +686,16 @@ export default function Pitch() {
           const player = players.find((p) => p.id === slot.playerId)
           if (!player) return null
           const pos = slotPos(slot)
+          // 颜色绑定球员角色（preferredPositions），与场上站位无关：设置了 CAM 就永远是 CAM 色
+          const rolePos = player.preferredPositions[0] ?? slot.position
           return (
             <PlayerToken
               key={slot.playerId}
+              playerId={slot.playerId}
+              name={player.name}
               number={player.number}
               position={slot.position}
-              color={POSITION_COLOR[slot.position]}
+              color={POSITION_COLOR[rolePos]}
               x={pos.x}
               y={pos.y}
               team="own"
@@ -553,10 +716,17 @@ export default function Pitch() {
           </div>
         )}
         {demoView?.note && <div className="demo-note">{demoView.note}</div>}
+        {tool === 'curve' && curveDraft && (
+          <div className="demo-note">
+            {curveDraft.ctrl === null
+              ? '弧线 2/3：点击弯点（转点）'
+              : '弧线 3/3：点击终点完成（Esc 取消）'}
+          </div>
+        )}
         {mode === 'both' && (
           <div className="pitch-legend">
-            <span className="legend-dot own" /> 我方
-            <span className="legend-dot opp" /> 对方
+            <span className="legend-dot own" /> 彩色 = 我方
+            <span className="legend-dot opp" /> 灰色 = 对方
           </div>
         )}
       </div>

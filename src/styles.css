@@ -62,7 +62,7 @@ select:focus-visible {
 .toolbar-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -144,6 +144,9 @@ select:focus-visible {
 }
 
 .draw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: var(--bg);
   color: var(--muted);
   border: 1px solid var(--border);
@@ -152,6 +155,12 @@ select:focus-visible {
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.draw-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .draw-btn:hover {
@@ -212,7 +221,7 @@ select:focus-visible {
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .mode-switch {
@@ -510,9 +519,21 @@ select:focus-visible {
 
 .modal-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 18px;
+}
+
+.modal-actions .modal-remove {
+  background: transparent;
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  margin-right: auto;
+}
+
+.modal-actions .modal-remove:hover {
+  background: rgba(248, 113, 113, 0.12);
 }
 
 .modal-actions button {
@@ -607,6 +628,15 @@ select:focus-visible {
 /* 绘制模式下球员不可拖拽（穿透点击，便于在球员上方绘制） */
 .pitch.drawing .player-token {
   pointer-events: none;
+}
+
+/* 橡皮模式：鼠标变橡皮光标，球场和足球区域均生效 */
+.pitch.erasing {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><g transform='rotate(45 13 13)'><rect x='7' y='3' width='12' height='20' rx='2.5' fill='%23fbbf24' stroke='%230f172a' stroke-width='1.6'/><rect x='7' y='15' width='12' height='8' rx='2.5' fill='%2394a3b8' stroke='%230f172a' stroke-width='1.6'/></g></svg>") 13 13, auto;
+}
+
+.pitch.erasing .ball {
+  cursor: inherit;
 }
 
 /* 演示播放中球员与足球不可拖拽 */
@@ -842,7 +872,8 @@ select:focus-visible {
 }
 
 .legend-dot.own {
-  background: #3b82f6;
+  background: transparent;
+  border: 2px solid #fff;
 }
 
 .legend-dot.opp {
@@ -866,6 +897,20 @@ select:focus-visible {
 
 .player-token:hover .token-circle {
   scale: 1.06;
+}
+
+.token-name {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+  padding: 1px 5px;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .token-pos {
@@ -1001,6 +1046,10 @@ select:focus-visible {
   z-index: 1000;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .ghost-circle {

@@ -1,4 +1,4 @@
-import type { ArrowDef, PitchOrientation, TextDef, XY, ZoneDef } from './types'
+import type { ArrowDef, CurveDef, PitchOrientation, TextDef, XY, ZoneDef } from './types'
 import { toDisplay } from './drag'
 
 /** 数据坐标 → 屏幕像素 */
@@ -53,4 +53,31 @@ export function hitText(
 ): boolean {
   const p = toPx({ x: t.x, y: t.y }, rect, orientation)
   return Math.hypot(clientX - p.x, clientY - p.y) < 24
+}
+
+
+/** 二次贝塞尔取点 */
+export function quadraticPoint(a: XY, c: XY, b: XY, t: number): XY {
+  const u = 1 - t
+  return {
+    x: u * u * a.x + 2 * u * t * c.x + t * t * b.x,
+    y: u * u * a.y + 2 * u * t * c.y + t * t * b.y,
+  }
+}
+
+/** 曲线命中判定：采样 24 段，距任一段 < 9px */
+export function hitCurve(
+  clientX: number,
+  clientY: number,
+  cv: CurveDef,
+  rect: DOMRect,
+  orientation: PitchOrientation,
+): boolean {
+  let prev = toPx(cv.from, rect, orientation)
+  for (let i = 1; i <= 24; i++) {
+    const pt = toPx(quadraticPoint(cv.from, cv.ctrl, cv.to, i / 24), rect, orientation)
+    if (distToSegment(clientX, clientY, prev.x, prev.y, pt.x, pt.y) < 9) return true
+    prev = pt
+  }
+  return false
 }
